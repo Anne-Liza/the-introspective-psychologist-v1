@@ -1,0 +1,79 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.production
+    environment:
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-the_introspective_psychologist_production_proof}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting production}@db:5432/${POSTGRES_DB:-the_introspective_psychologist_production_proof}"
+      STORAGE_PROVIDER: local
+      LOCAL_UPLOAD_DIR: /app/uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - the_introspective_psychologist_production_proof_uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:?Set VITE_API_BASE_URL before building production}"
+        VITE_SITE_URL: "${VITE_SITE_URL:?Set VITE_SITE_URL before building production}"
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://127.0.0.1/ || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-the_introspective_psychologist_production_proof}"
+      POSTGRES_USER: "${POSTGRES_USER:-the_introspective_psychologist_production_proof}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD before starting production}"
+    volumes:
+      - the_introspective_psychologist_production_proof_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-the_introspective_psychologist_production_proof} -d ${POSTGRES_DB:-the_introspective_psychologist_production_proof}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  the_introspective_psychologist_production_proof_postgres_data:
+  the_introspective_psychologist_production_proof_uploads_data:

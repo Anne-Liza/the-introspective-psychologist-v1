@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Layered shapes suggesting a gentle pause</title>
+  <rect width="1200" height="800" fill="#eef2e7"/>
+  <circle cx="600" cy="400" r="270" fill="#d5dfbf"/>
+  <circle cx="600" cy="400" r="190" fill="#fbfaf5"/>
+  <circle cx="600" cy="400" r="110" fill="#73885e"/>
+  <path d="M120 610c210-230 360-200 480 10-225 105-380 105-480-10z" fill="#b8c59d" opacity=".8"/>
+  <path d="M1080 205c-210 230-360 200-480-10 225-105 380-105 480 10z" fill="#40573d" opacity=".78"/>
+</svg>

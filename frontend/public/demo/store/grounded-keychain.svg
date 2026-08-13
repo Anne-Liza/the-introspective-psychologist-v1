@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Grounded keychain illustration</title>
+  <rect width="800" height="600" fill="#f5f0e5"/>
+  <circle cx="400" cy="180" r="88" fill="none" stroke="#6f8155" stroke-width="22"/>
+  <path d="M400 266v70" stroke="#6f8155" stroke-width="22" stroke-linecap="round"/>
+  <rect x="290" y="326" width="220" height="170" rx="85" fill="#2f4733"/>
+  <path d="M350 412c32 30 68 30 100 0" fill="none" stroke="#d9e2c7" stroke-width="12" stroke-linecap="round"/>
+</svg>

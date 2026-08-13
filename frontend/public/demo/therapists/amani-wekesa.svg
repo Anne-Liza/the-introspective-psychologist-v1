@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1100" role="img" aria-labelledby="title">
+  <title id="title">Illustrated portrait of Amani Wekesa</title>
+  <rect width="900" height="1100" fill="#e8eee2"/>
+  <circle cx="680" cy="240" r="190" fill="#d4dfbd"/>
+  <path d="M125 1100c35-330 150-480 325-480s295 150 330 480z" fill="#385a45"/>
+  <ellipse cx="450" cy="440" rx="210" ry="245" fill="#8c5d43"/>
+  <path d="M245 420c0-220 105-320 215-320 150 0 250 120 235 350-70-60-100-160-112-230-70 100-175 158-338 200z" fill="#25362b"/>
+  <circle cx="375" cy="455" r="18" fill="#233127"/><circle cx="535" cy="455" r="18" fill="#233127"/>
+  <path d="M380 555c42 40 100 40 142 0" fill="none" stroke="#422b22" stroke-width="18" stroke-linecap="round"/>
+  <path d="M700 770c85-95 125-200 110-315 95 100 92 250-110 315z" fill="#81976a"/>
+</svg>

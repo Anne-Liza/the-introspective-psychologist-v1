@@ -1,0 +1,55 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "${BACKEND_PORT:-8018}:8000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5191}:5173"
+    env_file:
+      - ./frontend/.env
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-the_introspective_psychologist_production_proof}
+      POSTGRES_USER: ${POSTGRES_USER:-the_introspective_psychologist_production_proof}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-the_introspective_psychologist_production_proof}
+    ports:
+      - "${POSTGRES_PORT:-5455}:5432"
+    volumes:
+      - the_introspective_psychologist_production_proof_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-the_introspective_psychologist_production_proof} -d ${POSTGRES_DB:-the_introspective_psychologist_production_proof}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_UI_PORT:-8043}:8025"
+      - "${MAILPIT_SMTP_PORT:-1043}:1025"
+
+volumes:
+  the_introspective_psychologist_production_proof_postgres_data:

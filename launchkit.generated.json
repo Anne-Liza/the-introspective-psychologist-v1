@@ -1,0 +1,176 @@
+{
+  "app_name": "the-introspective-psychologist-production-proof",
+  "profile": "therapy_practice",
+  "generated_from": "Launch Kit",
+  "resolved_modules": [
+    "app_settings",
+    "appointments",
+    "auth",
+    "availability",
+    "blog",
+    "booking_engine",
+    "cart_checkout",
+    "client_records",
+    "commerce_core",
+    "contact_messages",
+    "email",
+    "email_templates",
+    "files",
+    "fulfillment",
+    "health",
+    "invitations",
+    "landing_sections",
+    "mpesa_payments",
+    "payment_attempts",
+    "payment_requests",
+    "public_site",
+    "receipts",
+    "roles",
+    "services",
+    "therapist_profiles",
+    "users"
+  ],
+  "backend_modules_keep": [
+    "app_settings",
+    "appointments",
+    "auth",
+    "availability",
+    "blog",
+    "booking_engine",
+    "client_records",
+    "commerce_core",
+    "contact_messages",
+    "email",
+    "email_templates",
+    "files",
+    "fulfillment",
+    "health",
+    "invitations",
+    "landing_sections",
+    "mpesa_payments",
+    "payment_attempts",
+    "payment_requests",
+    "receipts",
+    "roles",
+    "services",
+    "therapist_profiles",
+    "users"
+  ],
+  "frontend_features_keep": [
+    "appointments",
+    "auth",
+    "availability",
+    "blog",
+    "booking-engine",
+    "cart-checkout",
+    "client-records",
+    "commerce-core",
+    "contact-messages",
+    "content",
+    "email",
+    "email-templates",
+    "files",
+    "fulfillment",
+    "invitations",
+    "mpesa-payments",
+    "payment-attempts",
+    "payment-requests",
+    "public",
+    "receipts",
+    "services",
+    "settings",
+    "therapist-profiles",
+    "users"
+  ],
+  "dashboard_sections": [
+    "Dashboard",
+    "Therapist Profiles",
+    "Services",
+    "Appointments",
+    "Client Records",
+    "Commerce",
+    "Payment Requests",
+    "Payment Attempts",
+    "M-Pesa Payments",
+    "Availability",
+    "Client Inquiries",
+    "Intake Forms",
+    "Assessments",
+    "Consent Records",
+    "Session Notes",
+    "Resources",
+    "Blog",
+    "Files",
+    "Users",
+    "Roles",
+    "Settings"
+  ],
+  "roles": [
+    {
+      "name": "Super Developer",
+      "label": "Super Developer",
+      "description": "Technical bootstrap, maintenance, and audited break-glass recovery access.",
+      "system_role": true,
+      "inviteable": false,
+      "maximum_active": 1,
+      "permission_policy": {
+        "mode": "system_all"
+      }
+    },
+    {
+      "name": "Practice Admin",
+      "label": "Practice Admin",
+      "description": "Owns and manages this practice, its staff, public content, operations, payments, and configuration.",
+      "system_role": false,
+      "inviteable": true,
+      "invited_by_roles": [
+        "Super Developer"
+      ],
+      "maximum_active": 1,
+      "permission_policy": {
+        "mode": "all_selected",
+        "exclude": [
+          "users.create",
+          "users.delete",
+          "roles.manage"
+        ]
+      }
+    },
+    {
+      "name": "Therapist",
+      "label": "Therapist",
+      "description": "Regular therapist staff who manage their own professional profile and availability through current-user scoped workflows.",
+      "system_role": false,
+      "inviteable": true,
+      "invited_by_roles": [
+        "Super Developer",
+        "Practice Admin"
+      ],
+      "permission_policy": {
+        "mode": "explicit"
+      },
+      "permissions": [
+        "therapist_profiles.own.read",
+        "therapist_profiles.own.create",
+        "therapist_profiles.own.update",
+        "therapist_profiles.own.submit",
+        "availability.own.read",
+        "availability.own.create",
+        "availability.own.update",
+        "availability.own.delete"
+      ]
+    }
+  ],
+  "deployment_stack": {
+    "database": "Supabase Postgres",
+    "backend": "Render Web Service",
+    "frontend": "Netlify"
+  },
+  "storage": {
+    "default": "local",
+    "recommended_production": [
+      "supabase",
+      "s3"
+    ]
+  }
+}

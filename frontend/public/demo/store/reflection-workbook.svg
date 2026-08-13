@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Guided reflection workbook</title>
+  <rect width="1200" height="800" fill="#edf1e6"/>
+  <rect x="300" y="90" width="520" height="620" rx="32" fill="#536d48" transform="rotate(-5 560 400)"/>
+  <rect x="365" y="165" width="390" height="230" rx="24" fill="#f5f1e7" transform="rotate(-5 560 280)"/>
+  <text x="560" y="245" text-anchor="middle" fill="#263b28" font-family="Georgia,serif" font-size="48">Guided</text>
+  <text x="560" y="305" text-anchor="middle" fill="#263b28" font-family="Georgia,serif" font-size="48">Reflection</text>
+  <path d="M450 485c80-95 165-95 250 0-85 80-170 80-250 0z" fill="#c9d5ae"/>
+  <circle cx="930" cy="590" r="120" fill="#d7dfbd"/>
+</svg>

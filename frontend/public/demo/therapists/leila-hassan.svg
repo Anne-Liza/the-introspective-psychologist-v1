@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1100" role="img" aria-labelledby="title">
+  <title id="title">Illustrated portrait of Leila Hassan</title>
+  <rect width="900" height="1100" fill="#f1eadc"/>
+  <path d="M0 150C220 20 450 20 900 200v260C520 250 260 300 0 500z" fill="#dce5ce"/>
+  <path d="M90 1100c70-330 190-480 360-480 180 0 300 150 360 480z" fill="#536b3a"/>
+  <ellipse cx="450" cy="440" rx="195" ry="235" fill="#b87a5e"/>
+  <path d="M240 430c-25-220 80-340 218-340 155 0 255 145 210 360-95-75-165-170-200-275-30 120-105 210-228 255z" fill="#342e2a"/>
+  <circle cx="380" cy="455" r="17" fill="#2c2724"/><circle cx="530" cy="455" r="17" fill="#2c2724"/>
+  <path d="M390 550c38 32 85 32 125 0" fill="none" stroke="#6e3f35" stroke-width="17" stroke-linecap="round"/>
+  <circle cx="735" cy="720" r="100" fill="#c7d39f"/>
+</svg>

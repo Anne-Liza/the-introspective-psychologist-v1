@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Practice tote bag illustration</title>
+  <rect width="800" height="600" fill="#e8eee1"/>
+  <path d="M260 210h280l42 310H218z" fill="#d9c9a8"/>
+  <path d="M330 230c0-105 140-105 140 0" fill="none" stroke="#52683e" stroke-width="22"/>
+  <circle cx="400" cy="365" r="62" fill="#52683e"/>
+  <path d="M367 369c23 25 43 25 66 0" fill="none" stroke="#eef1e7" stroke-width="10" stroke-linecap="round"/>
+</svg>

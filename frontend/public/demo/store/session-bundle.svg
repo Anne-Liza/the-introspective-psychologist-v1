@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Three-session support bundle</title>
+  <rect width="1200" height="800" fill="#f5f1e8"/>
+  <path d="M180 600c0-165 90-265 230-265s230 100 230 265v80H180z" fill="#465f45"/>
+  <path d="M560 600c0-165 90-265 230-265s230 100 230 265v80H560z" fill="#70835a"/>
+  <circle cx="410" cy="255" r="98" fill="#99ae83"/>
+  <circle cx="790" cy="255" r="98" fill="#c7d3ad"/>
+  <circle cx="600" cy="145" r="86" fill="#dce5ce"/>
+  <text x="600" y="170" text-anchor="middle" fill="#31472f" font-family="Georgia,serif" font-size="72">3</text>
+  <path d="M515 700h170" stroke="#9b7654" stroke-width="28" stroke-linecap="round"/>
+</svg>

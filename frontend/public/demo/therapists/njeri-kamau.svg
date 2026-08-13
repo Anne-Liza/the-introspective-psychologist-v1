@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1100" role="img" aria-labelledby="title">
+  <title id="title">Illustrated portrait of Njeri Kamau</title>
+  <rect width="900" height="1100" fill="#e3ece5"/>
+  <circle cx="170" cy="260" r="150" fill="#c8d6aa"/>
+  <path d="M85 1100c55-345 175-490 365-490s315 145 365 490z" fill="#293f2b"/>
+  <ellipse cx="450" cy="435" rx="205" ry="245" fill="#744934"/>
+  <path d="M245 440c-40-250 70-360 210-360 170 0 275 140 230 385-80-40-140-115-180-230-50 105-140 175-260 205z" fill="#171f1a"/>
+  <path d="M265 250c-45-95 15-185 105-175-5-78 115-105 160-35 70-55 160 20 130 105 85 30 90 130 25 175z" fill="#171f1a"/>
+  <circle cx="375" cy="455" r="18" fill="#1c211d"/><circle cx="535" cy="455" r="18" fill="#1c211d"/>
+  <path d="M385 555c43 38 100 38 140 0" fill="none" stroke="#43281f" stroke-width="18" stroke-linecap="round"/>
+  <path d="M735 730c-80-125-70-245 20-330 45 130 20 240-20 330z" fill="#78906d"/>
+</svg>

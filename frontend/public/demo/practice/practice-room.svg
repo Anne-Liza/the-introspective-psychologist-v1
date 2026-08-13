@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">A calm therapy room</title>
+  <desc id="desc">Two olive chairs, a small table, a plant, and warm morning light.</desc>
+  <rect width="1200" height="800" fill="#f5f1e7"/>
+  <path d="M0 0h540L300 800H0z" fill="#e4ead7"/>
+  <circle cx="1000" cy="150" r="90" fill="#d7dfbd"/>
+  <rect x="690" y="110" width="350" height="330" rx="175" fill="#fbfaf5" stroke="#cbd5b6" stroke-width="12"/>
+  <path d="M250 520c0-120 70-190 170-190s170 70 170 190v170H250z" fill="#60764a"/>
+  <path d="M680 520c0-120 70-190 170-190s170 70 170 190v170H680z" fill="#2b4329"/>
+  <rect x="520" y="525" width="210" height="28" rx="14" fill="#9d7955"/>
+  <rect x="612" y="550" width="26" height="145" rx="13" fill="#9d7955"/>
+  <path d="M1080 650c-70-100-80-230-20-320 55 110 58 220 20 320zm0 0c30-120 100-210 190-240-22 115-85 200-190 240z" fill="#71865a"/>
+</svg>

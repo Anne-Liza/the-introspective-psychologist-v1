@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Two chairs ready for a first conversation</title>
+  <rect width="1200" height="800" fill="#f7f3e8"/>
+  <circle cx="240" cy="190" r="145" fill="#dbe4c9"/>
+  <path d="M135 610c0-155 75-245 205-245s205 90 205 245v85H135z" fill="#668057"/>
+  <path d="M655 610c0-155 75-245 205-245s205 90 205 245v85H655z" fill="#29432d"/>
+  <rect x="510" y="540" width="180" height="25" rx="12" fill="#9d7955"/>
+  <path d="M590 565v130" stroke="#9d7955" stroke-width="25" stroke-linecap="round"/>
+  <path d="M1010 370c20-145 95-245 185-280-5 140-65 245-185 280z" fill="#8ca079"/>
+</svg>

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Notebook, warm drink, and leaves</title>
+  <rect width="1200" height="800" fill="#f2eddf"/>
+  <rect x="230" y="145" width="500" height="535" rx="28" fill="#fffdf7" stroke="#cbd4b8" stroke-width="12" transform="rotate(-6 480 410)"/>
+  <path d="M350 285h260M330 360h300M315 435h285M300 510h235" stroke="#a7b492" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="880" cy="420" r="150" fill="#6f845d"/>
+  <circle cx="880" cy="420" r="105" fill="#f7f1e5"/>
+  <path d="M1000 400c110-10 120 150 10 160" fill="none" stroke="#6f845d" stroke-width="35"/>
+  <path d="M930 175c-25 155-110 235-245 245 35-140 115-225 245-245z" fill="#456144"/>
+</svg>

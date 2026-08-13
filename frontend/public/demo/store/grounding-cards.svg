@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title">
+  <title id="title">Grounding prompt card set</title>
+  <rect width="1200" height="800" fill="#f4eee2"/>
+  <rect x="180" y="190" width="360" height="470" rx="44" fill="#b9c9a0" transform="rotate(-12 360 425)"/>
+  <rect x="420" y="120" width="360" height="500" rx="44" fill="#60784e" transform="rotate(4 600 370)"/>
+  <rect x="670" y="175" width="350" height="470" rx="44" fill="#f9f7ef" stroke="#c9d3b4" stroke-width="12" transform="rotate(11 845 410)"/>
+  <circle cx="600" cy="335" r="92" fill="#dbe4c9"/>
+  <path d="M555 355c40 35 82 35 120 0" fill="none" stroke="#36503b" stroke-width="15" stroke-linecap="round"/>
+  <path d="M780 340c35-90 95-135 175-135-20 85-75 140-175 135z" fill="#739069"/>
+</svg>

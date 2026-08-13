@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-labelledby="title">
+  <title id="title">Practice T-shirt illustration</title>
+  <rect width="800" height="600" fill="#f4f0e7"/>
+  <path d="M290 120l-150 90 80 120 70-38v230h220V292l70 38 80-120-150-90c-22 48-198 48-220 0z" fill="#52683e"/>
+  <circle cx="400" cy="315" r="62" fill="#d9e2c7"/>
+  <path d="M366 322c23 24 45 24 68 0" fill="none" stroke="#52683e" stroke-width="10" stroke-linecap="round"/>
+</svg>
