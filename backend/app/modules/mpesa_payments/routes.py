@@ -131,7 +131,7 @@ def prepare_public_mpesa_stk_push(
             "currency": attempt.currency,
             "status": attempt.status,
             "adapter_mode": "prepare_only",
-            "source": "public_booking",
+            "source": "public_payment",
         },
     )
 
@@ -242,7 +242,7 @@ def initiate_public_mpesa_stk_push(
             "currency": attempt.currency,
             "status": attempt.status,
             "adapter_mode": "live",
-            "source": "public_booking",
+            "source": "public_payment",
         },
     )
 

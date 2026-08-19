@@ -12,12 +12,17 @@ import {
   createPublicPaymentRequest,
   type PaymentRequest,
 } from "../../payment-requests/lib/paymentRequestsApi";
+import {
+  initiatePublicMpesaStkPush,
+  type PublicMpesaStkPushResponse,
+} from "../../mpesa-payments/lib/mpesaPaymentsApi";
 import { formatMoney } from "../lib/cart";
 import { useCart } from "../lib/cartStore";
 
 type CheckoutResult = {
   order: CommerceOrder;
   paymentRequest: PaymentRequest;
+  mpesaAttempt: PublicMpesaStkPushResponse;
 };
 
 export function PublicCheckoutPage() {
@@ -26,6 +31,7 @@ export function PublicCheckoutPage() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [createdOrder, setCreatedOrder] = useState<CommerceOrder | null>(null);
+  const [createdPaymentRequest, setCreatedPaymentRequest] = useState<PaymentRequest | null>(null);
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const { data, isLoading, isError } = useQuery({
     queryKey: ["public-commerce-items"],
@@ -60,13 +66,25 @@ export function PublicCheckoutPage() {
         setCreatedOrder(order);
       }
 
-      const paymentRequest = await createPublicPaymentRequest({
-        commerce_order_id: order.id,
-        customer_email: order.customer_email,
-        provider: "manual",
-        description: `Payment for order ${order.order_number}`,
+      const paymentRequest =
+        createdPaymentRequest ||
+        await createPublicPaymentRequest({
+          commerce_order_id: order.id,
+          customer_email: order.customer_email,
+          provider: "mpesa",
+          description: `Payment for order ${order.order_number}`,
+        });
+
+      if (!createdPaymentRequest) {
+        setCreatedPaymentRequest(paymentRequest);
+      }
+
+      const mpesaAttempt = await initiatePublicMpesaStkPush({
+        paymentRequestId: paymentRequest.id,
+        phone_number: customerPhone,
       });
-      return { order, paymentRequest };
+
+      return { order, paymentRequest, mpesaAttempt };
     },
     onSuccess: (checkoutResult) => {
       setResult(checkoutResult);
@@ -87,7 +105,7 @@ export function PublicCheckoutPage() {
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">Order received</p>
           <h1 className="mt-3 font-serif text-5xl text-[#26311f]">Thank you for your order.</h1>
           <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
-            Your pending payment request has been created. The practice will follow up using the contact details you provided with the appropriate payment instructions.
+            Your M-Pesa payment prompt has been sent. Complete the payment on your phone. Your order remains pending until M-Pesa confirms the transaction.
           </p>
           <dl className="mt-8 grid w-full gap-3 rounded-[2rem] border border-[#dfe5d6] bg-white p-7 text-left sm:grid-cols-3">
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Order</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.order.order_number}</dd></div>
@@ -130,7 +148,7 @@ export function PublicCheckoutPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6a7a4e]">Checkout</p>
             <h1 className="mt-3 font-serif text-5xl tracking-[-0.04em] text-[#26311f]">Where should we send your order details?</h1>
             <p className="mt-5 max-w-3xl leading-8 text-[#5f6d54]">
-              Your order will remain pending until payment is confirmed by the practice.
+              Your order will remain pending until M-Pesa confirms the payment.
             </p>
 
             <form onSubmit={handleSubmit} className="mt-10 rounded-[2rem] border border-[#dfe5d6] bg-white p-6 shadow-sm md:p-9">
@@ -144,8 +162,8 @@ export function PublicCheckoutPage() {
                   <input required type="email" autoComplete="email" value={customerEmail} onChange={(event) => setCustomerEmail(event.target.value)} disabled={Boolean(createdOrder)} className="mt-2 w-full rounded-2xl border border-[#d7decb] px-4 py-3 font-normal outline-none focus:border-[#7a8c5d] focus:ring-4 focus:ring-[#e3ead8] disabled:bg-[#f4f5f1]" />
                 </label>
                 <label className="text-sm font-semibold text-[#26311f]">
-                  Phone <span className="font-normal text-[#748069]">optional</span>
-                  <input type="tel" autoComplete="tel" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} disabled={Boolean(createdOrder)} className="mt-2 w-full rounded-2xl border border-[#d7decb] px-4 py-3 font-normal outline-none focus:border-[#7a8c5d] focus:ring-4 focus:ring-[#e3ead8] disabled:bg-[#f4f5f1]" />
+                  M-Pesa phone
+                  <input required type="tel" autoComplete="tel" placeholder="07XXXXXXXX" value={customerPhone} onChange={(event) => setCustomerPhone(event.target.value)} disabled={checkoutMutation.isPending} className="mt-2 w-full rounded-2xl border border-[#d7decb] px-4 py-3 font-normal outline-none focus:border-[#7a8c5d] focus:ring-4 focus:ring-[#e3ead8] disabled:bg-[#f4f5f1]" />
                 </label>
               </div>
 
@@ -154,9 +172,13 @@ export function PublicCheckoutPage() {
                 <p>Do not include clinical details, diagnoses, emergency information, or payment credentials in this form.</p>
               </div>
 
-              {createdOrder && checkoutMutation.isError ? (
+              {createdPaymentRequest && checkoutMutation.isError ? (
                 <p className="mt-5 rounded-2xl bg-[#fff8e8] p-4 text-sm leading-6 text-[#725b19]">
-                  Your order was created, but its payment request was not. Retrying will use the same order rather than creating a duplicate.
+                  Your order and M-Pesa payment request were created, but the phone prompt could not be sent. Retrying will reuse the same payment request.
+                </p>
+              ) : createdOrder && checkoutMutation.isError ? (
+                <p className="mt-5 rounded-2xl bg-[#fff8e8] p-4 text-sm leading-6 text-[#725b19]">
+                  Your order was created, but its M-Pesa payment request was not. Retrying will reuse the same order.
                 </p>
               ) : checkoutMutation.isError ? (
                 <p className="mt-5 rounded-2xl bg-[#fff4f1] p-4 text-sm text-[#8b4a3a]">
@@ -169,7 +191,7 @@ export function PublicCheckoutPage() {
               ) : null}
 
               <button type="submit" disabled={cannotCheckout || checkoutMutation.isPending} className="mt-6 rounded-full bg-[#556b2f] px-7 py-3.5 font-semibold text-white transition hover:bg-[#465a27] disabled:cursor-not-allowed disabled:bg-[#aab49a]">
-                {checkoutMutation.isPending ? "Submitting…" : createdOrder ? "Retry payment request" : "Submit order"}
+                {checkoutMutation.isPending ? "Sending M-Pesa prompt…" : createdPaymentRequest ? "Retry M-Pesa prompt" : "Pay with M-Pesa"}
               </button>
             </form>
           </div>

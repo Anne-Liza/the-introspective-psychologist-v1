@@ -48,7 +48,7 @@ export type PaymentRequest = {
 export type PublicPaymentRequestPayload = {
   commerce_order_id: string;
   customer_email: string;
-  provider: "manual";
+  provider: "manual" | "mpesa";
   description?: string;
 };
 

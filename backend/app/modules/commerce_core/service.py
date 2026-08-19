@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.modules.commerce_core.models import CommerceItem, CommerceOrder, CommerceOrderItem
 from app.modules.commerce_core.schemas import CommerceOrderCreate, PublicCommerceOrderCreate
+from app.modules.payment_requests.models import PaymentRequest
 
 
 def generate_order_number() -> str:
@@ -165,6 +166,63 @@ def create_public_order_from_payload(db: Session, payload: PublicCommerceOrderCr
     db.add(order)
     db.commit()
     db.refresh(order)
+    return order
+
+
+
+def settle_paid_commerce_payment_request(
+    db: Session,
+    *,
+    payment_request_id: str,
+) -> CommerceOrder:
+    payment_request = db.get(
+        PaymentRequest,
+        payment_request_id,
+    )
+
+    if (
+        payment_request is None
+        or payment_request.target_type != "commerce_order"
+    ):
+        raise LookupError("Commerce payment request not found.")
+
+    if payment_request.status != "paid":
+        raise ValueError("Commerce payment request is not paid.")
+
+    order = db.get(
+        CommerceOrder,
+        payment_request.target_id,
+    )
+
+    if order is None:
+        raise LookupError("Commerce order not found.")
+
+    if payment_request.commerce_order_id != order.id:
+        raise ValueError(
+            "Payment request does not match the commerce order."
+        )
+
+    if (
+        payment_request.amount != order.total_amount
+        or payment_request.currency != order.currency
+    ):
+        raise ValueError(
+            "Payment amount or currency does not match the order."
+        )
+
+    if order.status == "paid":
+        return order
+
+    if order.status != "pending_payment":
+        raise ValueError(
+            f"Order cannot be settled from status {order.status}."
+        )
+
+    order.status = "paid"
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+
     return order
 
 

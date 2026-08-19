@@ -92,7 +92,7 @@ class PublicPaymentRequestFromOrderCreate(BaseModel):
 
     commerce_order_id: str
     customer_email: str
-    provider: Literal["manual"] = "manual"
+    provider: Literal["manual", "mpesa"] = "manual"
     description: str | None = None
 
     @field_validator("commerce_order_id")

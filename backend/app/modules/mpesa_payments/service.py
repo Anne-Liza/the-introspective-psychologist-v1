@@ -9,6 +9,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
+from app.modules.commerce_core.service import (
+    settle_paid_commerce_payment_request,
+)
 from app.modules.booking_engine.models import (
     BookingHold,
 )
@@ -179,7 +182,10 @@ def prepare_public_stk_push_attempt(
     if (
         payment_request is None
         or payment_request.target_type
-        != "booking_hold"
+        not in {
+            "booking_hold",
+            "commerce_order",
+        }
     ):
         raise LookupError(
             "Payment request not found."
@@ -1186,6 +1192,50 @@ def verify_mpesa_provider_event(
                     appointment_id = (
                         booking_hold.appointment_id
                     )
+
+        if (
+            payment_request is not None
+            and payment_request.target_type
+            == "commerce_order"
+        ):
+            try:
+                settle_paid_commerce_payment_request(
+                    db,
+                    payment_request_id=payment_request.id,
+                )
+            except (
+                LookupError,
+                ValueError,
+                SQLAlchemyError,
+            ) as exc:
+                db.rollback()
+
+                verified_event = db.get(
+                    PaymentProviderEvent,
+                    provider_event_id,
+                )
+
+                if verified_event is None:
+                    raise LookupError(
+                        "M-Pesa provider event not found."
+                    )
+
+                verified_event.notes = _append_mpesa_note(
+                    verified_event.notes,
+                    (
+                        "Commerce order settlement "
+                        "requires manual review. "
+                        f"Error type: {type(exc).__name__}."
+                    ),
+                )
+
+                db.add(verified_event)
+                db.commit()
+
+            payment_request = db.get(
+                PaymentRequest,
+                payment_request_id,
+            )
 
         if payment_request is not None:
             try:
