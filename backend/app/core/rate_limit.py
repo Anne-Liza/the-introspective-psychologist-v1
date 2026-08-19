@@ -81,7 +81,13 @@ def identifier_hash(value: str) -> str:
     return sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def _check_bucket(key: str, limit: int, window_seconds: int) -> tuple[int, int]:
+def _check_bucket(
+    key: str,
+    limit: int,
+    window_seconds: int,
+    *,
+    record_attempt: bool = True,
+) -> tuple[int, int]:
     now = monotonic()
     bucket = _BUCKETS[key]
 
@@ -89,10 +95,15 @@ def _check_bucket(key: str, limit: int, window_seconds: int) -> tuple[int, int]:
         bucket.popleft()
 
     if len(bucket) >= limit:
-        retry_after = max(1, int(window_seconds - (now - bucket[0])))
+        retry_after = max(
+            1,
+            int(window_seconds - (now - bucket[0])),
+        )
         return retry_after, 0
 
-    bucket.append(now)
+    if record_attempt:
+        bucket.append(now)
+
     remaining = max(0, limit - len(bucket))
     return 0, remaining
 
@@ -103,11 +114,17 @@ def enforce_rate_limit(
     limit: int,
     window_seconds: int,
     detail: str = "Too many requests. Please try again later.",
+    record_attempt: bool = True,
 ) -> None:
     if not settings.RATE_LIMIT_ENABLED:
         return
 
-    retry_after, _remaining = _check_bucket(key, limit, window_seconds)
+    retry_after, _remaining = _check_bucket(
+        key,
+        limit,
+        window_seconds,
+        record_attempt=record_attempt,
+    )
 
     if retry_after > 0:
         raise HTTPException(
@@ -141,6 +158,56 @@ def enforce_auth_rate_limit(request: Request, identifier: str) -> None:
         window_seconds=settings.RATE_LIMIT_AUTH_IDENTIFIER_WINDOW_SECONDS,
         detail="Too many authentication attempts. Please try again later.",
     )
+
+
+def _login_failure_keys(
+    request: Request,
+    identifier: str,
+) -> tuple[str, str, str]:
+    ip = client_ip(request)
+    hashed_identifier = identifier_hash(identifier)
+
+    return (
+        f"auth-login-failure:ip:{ip}",
+        f"auth-login-failure:identifier:{hashed_identifier}",
+        f"auth-login-failure:pair:{ip}:{hashed_identifier}",
+    )
+
+
+def enforce_login_failure_rate_limit(
+    request: Request,
+    identifier: str,
+) -> None:
+    ip_key, identifier_key, pair_key = (
+        _login_failure_keys(request, identifier)
+    )
+
+    enforce_rate_limit(
+        key=ip_key,
+        limit=settings.RATE_LIMIT_AUTH_IP_REQUESTS,
+        window_seconds=settings.RATE_LIMIT_AUTH_IP_WINDOW_SECONDS,
+        detail="Too many authentication attempts. Please try again later.",
+        record_attempt=False,
+    )
+
+    for key in (identifier_key, pair_key):
+        enforce_rate_limit(
+            key=key,
+            limit=settings.RATE_LIMIT_AUTH_IDENTIFIER_REQUESTS,
+            window_seconds=settings.RATE_LIMIT_AUTH_IDENTIFIER_WINDOW_SECONDS,
+            detail="Too many authentication attempts. Please try again later.",
+            record_attempt=False,
+        )
+
+
+def record_login_failure(
+    request: Request,
+    identifier: str,
+) -> None:
+    now = monotonic()
+
+    for key in _login_failure_keys(request, identifier):
+        _BUCKETS[key].append(now)
 
 
 def enforce_invitation_manage_rate_limit(user_id: str) -> None:

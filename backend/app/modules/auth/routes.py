@@ -4,7 +4,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.audit_events import AuditAction, record_audit_event
 from app.core.database import get_db
-from app.core.rate_limit import enforce_auth_rate_limit
+from app.core.rate_limit import (
+    enforce_auth_rate_limit,
+    enforce_login_failure_rate_limit,
+    record_login_failure,
+)
 from app.core.profile_policy import public_registration_enabled
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.schemas import (
@@ -94,10 +98,22 @@ def reset_password(payload: ResetPasswordRequest, request: Request, db: Session 
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
-    enforce_auth_rate_limit(request, payload.email)
+    enforce_login_failure_rate_limit(
+        request,
+        payload.email,
+    )
+
     try:
-        user = authenticate_user(db, payload.email, payload.password)
+        user = authenticate_user(
+            db,
+            payload.email,
+            payload.password,
+        )
     except HTTPException:
+        record_login_failure(
+            request,
+            payload.email,
+        )
         record_audit_event(
             db,
             action=AuditAction.AUTH_LOGIN_FAILED,
