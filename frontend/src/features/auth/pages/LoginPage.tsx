@@ -1,4 +1,6 @@
 import { FormEvent, useState } from "react";
+import { isAxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router";
 
 import { useAuth } from "../context/AuthContext";
@@ -16,12 +18,43 @@ const loginCopy = {
 };
 const AUTH_NOTICE_KEY = "launchkit_auth_notice";
 
+function getLoginErrorMessage(error: unknown) {
+  if (isAxiosError(error)) {
+    const status = error.response?.status;
+
+    if (status === 401) {
+      return "The email or password is incorrect.";
+    }
+
+    if (status === 429) {
+      return "Too many login attempts. Please wait a few minutes and try again.";
+    }
+
+    if (status && status >= 500) {
+      return "The server is temporarily unavailable. Please try again shortly.";
+    }
+
+    if (!error.response) {
+      return "We could not reach the server. Check your connection and try again.";
+    }
+
+    const detail = error.response?.data?.detail;
+
+    if (typeof detail === "string" && detail.trim()) {
+      return detail;
+    }
+  }
+
+  return "Login could not be completed. Please try again.";
+}
+
 export function LoginPage() {
   const { login } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -58,10 +91,8 @@ export function LoginPage() {
     try {
       await login(email, password);
       navigate("/dashboard", { replace: true });
-    } catch {
-      setError(
-        "Login failed. Check your email and password.",
-      );
+    } catch (loginError) {
+      setError(getLoginErrorMessage(loginError));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,17 +202,45 @@ export function LoginPage() {
                 </Link>
               </div>
 
-              <input
-                id="login-password"
-                className="mt-1 w-full rounded-xl border border-[#dce8d4] px-3 py-2 focus:border-[#82a85f] focus:outline-none focus:ring-2 focus:ring-[#dce8d4]"
-                type="password"
-                value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
-                }
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative mt-1">
+                <input
+                  id="login-password"
+                  className="w-full rounded-xl border border-[#dce8d4] px-3 py-2 pr-11 focus:border-[#82a85f] focus:outline-none focus:ring-2 focus:ring-[#dce8d4]"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) =>
+                    setPassword(event.target.value)
+                  }
+                  autoComplete="current-password"
+                  required
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPassword((current) => !current)
+                  }
+                  className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-[#526353] transition hover:text-[#132316]"
+                  aria-label={
+                    showPassword
+                      ? "Hide password"
+                      : "Show password"
+                  }
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? (
+                    <EyeOff
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                    />
+                  ) : (
+                    <Eye
+                      aria-hidden="true"
+                      className="h-5 w-5"
+                    />
+                  )}
+                </button>
+              </div>
             </div>
 
             <button
