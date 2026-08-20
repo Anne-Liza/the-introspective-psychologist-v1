@@ -94,3 +94,25 @@ export async function updatePaymentRequest({
     )
   ).data;
 }
+
+export type PublicPaymentStatus = {
+  payment_request_id: string;
+  request_number: string;
+  status: string;
+  amount: string;
+  currency: string;
+  provider: string;
+  provider_transaction_reference: string | null;
+  receipt_number: string | null;
+  receipt_status: string | null;
+};
+
+export async function fetchPublicPaymentStatus(
+  paymentRequestId: string,
+): Promise<PublicPaymentStatus> {
+  return (
+    await apiClient.get(
+      `/payment-requests/public/${paymentRequestId}/status`,
+    )
+  ).data;
+}

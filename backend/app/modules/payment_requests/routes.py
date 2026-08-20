@@ -13,7 +13,9 @@ from app.modules.payment_requests.schemas import (
     PaymentRequestRead,
     PaymentRequestUpdate,
     PublicPaymentRequestFromOrderCreate,
+    PublicPaymentStatusRead,
 )
+from app.modules.receipts.models import ReceiptRecord
 from app.modules.payment_requests.service import (
     attach_events,
     create_payment_request_from_order,
@@ -62,6 +64,64 @@ def create_public_payment_request_from_order(
         },
     )
     return payment_request
+
+
+@router.get(
+    "/public/{payment_request_id}/status",
+    response_model=PublicPaymentStatusRead,
+)
+def get_public_payment_status(
+    payment_request_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_public_action_rate_limit(
+        request,
+        scope="checkout_payment_status",
+    )
+
+    expire_stale_payment_requests(db)
+
+    payment_request = db.scalar(
+        select(PaymentRequest).where(
+            PaymentRequest.id == payment_request_id
+        )
+    )
+
+    if payment_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment status not found.",
+        )
+
+    receipt = db.scalar(
+        select(ReceiptRecord).where(
+            ReceiptRecord.payment_request_id
+            == payment_request.id
+        )
+    )
+
+    return PublicPaymentStatusRead(
+        payment_request_id=payment_request.id,
+        request_number=payment_request.request_number,
+        status=payment_request.status,
+        amount=payment_request.amount,
+        currency=payment_request.currency,
+        provider=payment_request.provider,
+        provider_transaction_reference=(
+            payment_request.provider_transaction_reference
+        ),
+        receipt_number=(
+            receipt.receipt_number
+            if receipt is not None
+            else None
+        ),
+        receipt_status=(
+            receipt.status
+            if receipt is not None
+            else None
+        ),
+    )
 
 
 @router.get("", response_model=list[PaymentRequestRead])

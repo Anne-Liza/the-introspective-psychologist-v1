@@ -18,6 +18,7 @@ PublicActionRateLimitScope = Literal[
     "booking_hold",
     "checkout_order",
     "checkout_payment",
+    "checkout_payment_status",
     "contact_submission",
     "payment_initiation",
     "provider_callback",
@@ -29,6 +30,7 @@ PUBLIC_ACTION_RATE_LIMIT_SCOPES = frozenset(
         "booking_hold",
         "checkout_order",
         "checkout_payment",
+        "checkout_payment_status",
         "contact_submission",
         "payment_initiation",
         "provider_callback",
@@ -54,6 +56,10 @@ PUBLIC_ACTION_RATE_LIMIT_POLICY_SETTINGS: dict[
     "checkout_payment": (
         "RATE_LIMIT_CHECKOUT_PAYMENT_REQUESTS",
         "RATE_LIMIT_CHECKOUT_PAYMENT_WINDOW_SECONDS",
+    ),
+    "checkout_payment_status": (
+        "RATE_LIMIT_CHECKOUT_PAYMENT_STATUS_REQUESTS",
+        "RATE_LIMIT_CHECKOUT_PAYMENT_STATUS_WINDOW_SECONDS",
     ),
     "contact_submission": (
         "RATE_LIMIT_CONTACT_REQUESTS",

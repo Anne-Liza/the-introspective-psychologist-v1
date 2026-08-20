@@ -87,6 +87,18 @@ class PaymentRequestFromOrderCreate(BaseModel):
         return normalize_optional_text(value)
 
 
+class PublicPaymentStatusRead(BaseModel):
+    payment_request_id: str
+    request_number: str
+    status: str
+    amount: Decimal
+    currency: str
+    provider: str
+    provider_transaction_reference: str | None = None
+    receipt_number: str | None = None
+    receipt_status: str | None = None
+
+
 class PublicPaymentRequestFromOrderCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

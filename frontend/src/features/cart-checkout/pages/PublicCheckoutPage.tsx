@@ -10,6 +10,7 @@ import {
 } from "../../commerce-core/lib/commerceCoreApi";
 import {
   createPublicPaymentRequest,
+  fetchPublicPaymentStatus,
   type PaymentRequest,
 } from "../../payment-requests/lib/paymentRequestsApi";
 import {
@@ -97,21 +98,116 @@ export function PublicCheckoutPage() {
     checkoutMutation.mutate();
   }
 
+  const paymentStatusQuery = useQuery({
+    queryKey: [
+      "public-payment-status",
+      result?.paymentRequest.id,
+    ],
+    queryFn: () =>
+      fetchPublicPaymentStatus(
+        result!.paymentRequest.id,
+      ),
+    enabled: Boolean(result?.paymentRequest.id),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+
+      if (
+        status === "paid" &&
+        query.state.data?.receipt_number
+      ) {
+        return false;
+      }
+
+      if (
+        status &&
+        ["failed", "cancelled", "expired"].includes(status)
+      ) {
+        return false;
+      }
+
+      return 5000;
+    },
+  });
+
+  const paymentStatus = paymentStatusQuery.data;
+  const paymentIsPaid = paymentStatus?.status === "paid";
+  const paymentIsFailed =
+    paymentStatus?.status === "failed" ||
+    paymentStatus?.status === "cancelled" ||
+    paymentStatus?.status === "expired";
+
   if (result) {
     return (
       <main className="bg-[#fbfaf5]">
         <section className="mx-auto flex min-h-[38rem] max-w-3xl flex-col items-center justify-center px-5 py-20 text-center">
-          <CheckCircle2 aria-hidden="true" className="h-16 w-16 text-[#556b2f]" />
-          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">Order received</p>
-          <h1 className="mt-3 font-serif text-5xl text-[#26311f]">Thank you for your order.</h1>
+          <CheckCircle2
+            aria-hidden="true"
+            className={`h-16 w-16 ${
+              paymentIsFailed
+                ? "text-[#a45c4b]"
+                : "text-[#556b2f]"
+            }`}
+          />
+
+          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">
+            {paymentIsPaid
+              ? "Payment confirmed"
+              : paymentIsFailed
+                ? "Payment incomplete"
+                : "Waiting for M-Pesa"}
+          </p>
+
+          <h1 className="mt-3 font-serif text-5xl text-[#26311f]">
+            {paymentIsPaid
+              ? "Payment successful."
+              : paymentIsFailed
+                ? "Your payment was not completed."
+                : "Confirm the payment on your phone."}
+          </h1>
+
           <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
-            Your M-Pesa payment prompt has been sent. Complete the payment on your phone. Your order remains pending until M-Pesa confirms the transaction.
+            {paymentIsPaid
+              ? "M-Pesa has confirmed your payment and your order is now paid."
+              : paymentIsFailed
+                ? "The M-Pesa transaction was cancelled, failed, or expired. Your order has not been marked as paid."
+                : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
           </p>
           <dl className="mt-8 grid w-full gap-3 rounded-[2rem] border border-[#dfe5d6] bg-white p-7 text-left sm:grid-cols-3">
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Order</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.order.order_number}</dd></div>
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Payment request</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.paymentRequest.request_number}</dd></div>
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Total</dt><dd className="mt-1 font-semibold text-[#26311f]">{formatMoney(result.order.total_amount, result.order.currency)}</dd></div>
           </dl>
+
+          {paymentIsPaid ? (
+            <div className="mt-5 w-full rounded-[2rem] border border-[#dfe5d6] bg-[#f4f7ef] p-6 text-left">
+              <p className="text-sm font-semibold text-[#26311f]">
+                Payment details
+              </p>
+
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#6a7a4e]">
+                    M-Pesa reference
+                  </p>
+                  <p className="mt-1 font-semibold text-[#26311f]">
+                    {paymentStatus?.provider_transaction_reference || "Confirmed"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-[#6a7a4e]">
+                    Receipt
+                  </p>
+                  <p className="mt-1 font-semibold text-[#26311f]">
+                    {paymentStatus?.receipt_number
+                      ? paymentStatus.receipt_number
+                      : "Preparing receipt…"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/store" className="rounded-full bg-[#556b2f] px-6 py-3 font-semibold text-white">Return to store</Link>
             <Link to="/contact" className="rounded-full border border-[#cbd5ba] px-6 py-3 font-semibold text-[#26311f]">Contact the practice</Link>
