@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, LockKeyhole } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, LockKeyhole } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router";
 
@@ -120,7 +120,12 @@ export function PublicCheckoutPage() {
 
       if (
         status &&
-        ["failed", "cancelled", "expired"].includes(status)
+        [
+          "failed",
+          "cancelled",
+          "expired",
+          "needs_review",
+        ].includes(status)
       ) {
         return false;
       }
@@ -131,6 +136,8 @@ export function PublicCheckoutPage() {
 
   const paymentStatus = paymentStatusQuery.data;
   const paymentIsPaid = paymentStatus?.status === "paid";
+  const paymentNeedsReview =
+    paymentStatus?.status === "needs_review";
   const paymentIsFailed =
     paymentStatus?.status === "failed" ||
     paymentStatus?.status === "cancelled" ||
@@ -140,37 +147,46 @@ export function PublicCheckoutPage() {
     return (
       <main className="bg-[#fbfaf5]">
         <section className="mx-auto flex min-h-[38rem] max-w-3xl flex-col items-center justify-center px-5 py-20 text-center">
-          <CheckCircle2
-            aria-hidden="true"
-            className={`h-16 w-16 ${
-              paymentIsFailed
-                ? "text-[#a45c4b]"
-                : "text-[#556b2f]"
-            }`}
-          />
+          {paymentIsFailed || paymentNeedsReview ? (
+            <CircleAlert
+              aria-hidden="true"
+              className="h-16 w-16 text-[#a45c4b]"
+            />
+          ) : (
+            <CheckCircle2
+              aria-hidden="true"
+              className="h-16 w-16 text-[#556b2f]"
+            />
+          )}
 
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">
             {paymentIsPaid
               ? "Payment confirmed"
-              : paymentIsFailed
-                ? "Payment incomplete"
-                : "Waiting for M-Pesa"}
+              : paymentNeedsReview
+                ? "Payment not confirmed"
+                : paymentIsFailed
+                  ? "Payment incomplete"
+                  : "Waiting for M-Pesa"}
           </p>
 
           <h1 className="mt-3 font-serif text-5xl text-[#26311f]">
             {paymentIsPaid
               ? "Payment successful."
-              : paymentIsFailed
-                ? "Your payment was not completed."
-                : "Confirm the payment on your phone."}
+              : paymentNeedsReview
+                ? "Your payment has not been confirmed."
+                : paymentIsFailed
+                  ? "Your payment was not completed."
+                  : "Confirm the payment on your phone."}
           </h1>
 
           <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
             {paymentIsPaid
               ? "M-Pesa has confirmed your payment and your order is now paid."
-              : paymentIsFailed
-                ? "The M-Pesa transaction was cancelled, failed, or expired. Your order has not been marked as paid."
-                : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
+              : paymentNeedsReview
+                ? "We have not received a verified payment confirmation from M-Pesa. Your order remains unpaid."
+                : paymentIsFailed
+                  ? "The M-Pesa transaction was cancelled, failed, or expired. Your order has not been marked as paid."
+                  : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
           </p>
           <dl className="mt-8 grid w-full gap-3 rounded-[2rem] border border-[#dfe5d6] bg-white p-7 text-left sm:grid-cols-3">
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Order</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.order.order_number}</dd></div>
@@ -208,9 +224,44 @@ export function PublicCheckoutPage() {
             </div>
           ) : null}
 
+          {paymentNeedsReview ? (
+            <p className="mt-5 max-w-2xl font-medium leading-7 text-[#7a4d3a]">
+              If your account was charged, contact the practice before making another payment.
+            </p>
+          ) : null}
+
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link to="/store" className="rounded-full bg-[#556b2f] px-6 py-3 font-semibold text-white">Return to store</Link>
-            <Link to="/contact" className="rounded-full border border-[#cbd5ba] px-6 py-3 font-semibold text-[#26311f]">Contact the practice</Link>
+            {paymentNeedsReview ? (
+              <>
+                <Link
+                  to="/contact"
+                  className="rounded-full bg-[#556b2f] px-6 py-3 font-semibold text-white"
+                >
+                  Contact the practice
+                </Link>
+                <Link
+                  to="/store"
+                  className="rounded-full border border-[#cbd5ba] px-6 py-3 font-semibold text-[#26311f]"
+                >
+                  Return to store
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link
+                  to="/store"
+                  className="rounded-full bg-[#556b2f] px-6 py-3 font-semibold text-white"
+                >
+                  Return to store
+                </Link>
+                <Link
+                  to="/contact"
+                  className="rounded-full border border-[#cbd5ba] px-6 py-3 font-semibold text-[#26311f]"
+                >
+                  Contact the practice
+                </Link>
+              </>
+            )}
           </div>
         </section>
       </main>

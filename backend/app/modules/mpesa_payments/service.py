@@ -817,6 +817,35 @@ def _reject_mpesa_event_after_query(
     )
     attempt.error_message = reason
 
+    payment_request = db.get(
+        PaymentRequest,
+        attempt.payment_request_id,
+    )
+
+    if (
+        payment_request is not None
+        and payment_request.status in {
+            "pending",
+            "processing",
+        }
+    ):
+        previous_status = payment_request.status
+        payment_request.status = "needs_review"
+
+        create_payment_request_event(
+            db,
+            payment_request=payment_request,
+            event_type="payment_request.needs_review",
+            from_status=previous_status,
+            to_status="needs_review",
+            notes=(
+                "M-Pesa verification could not "
+                "confirm the final transaction status."
+            ),
+        )
+
+        db.add(payment_request)
+
     db.add(event)
     db.add(attempt)
     db.commit()

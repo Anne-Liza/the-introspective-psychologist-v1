@@ -82,3 +82,64 @@ def test_public_stk_accepts_commerce_order(monkeypatch):
     )
 
     assert result is attempt
+
+
+def test_rejected_mpesa_verification_moves_request_to_needs_review(
+    monkeypatch,
+):
+    payment_request = SimpleNamespace(
+        id="payment-1",
+        status="processing",
+    )
+    attempt = SimpleNamespace(
+        payment_request_id="payment-1",
+        status="processing",
+        verification_status="unverified",
+        error_code=None,
+        error_message=None,
+    )
+    event = SimpleNamespace(
+        verification_status="unverified",
+        processed_at=None,
+        notes="Customer cancelled the STK prompt.",
+    )
+
+    recorded_events = []
+
+    monkeypatch.setattr(
+        mpesa,
+        "create_payment_request_event",
+        lambda _db, **kwargs: recorded_events.append(kwargs),
+    )
+
+    class DB:
+        def get(self, model, _id):
+            if model is PaymentRequest:
+                return payment_request
+            return None
+
+        def add(self, _obj):
+            pass
+
+        def commit(self):
+            pass
+
+        def refresh(self, _obj):
+            pass
+
+    result = mpesa._reject_mpesa_event_after_query(
+        DB(),
+        event=event,
+        attempt=attempt,
+        reason="Daraja result did not match the callback.",
+    )
+
+    assert result is event
+    assert event.verification_status == "rejected"
+    assert attempt.status == "needs_review"
+    assert attempt.verification_status == "rejected"
+    assert payment_request.status == "needs_review"
+
+    assert len(recorded_events) == 1
+    assert recorded_events[0]["from_status"] == "processing"
+    assert recorded_events[0]["to_status"] == "needs_review"

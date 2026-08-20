@@ -246,6 +246,24 @@ def apply_event_to_attempt_and_request(
         attempt.status = "needs_review"
         attempt.verification_status = "rejected"
         db.add(attempt)
+
+        try:
+            update_payment_request_after_verified_event(
+                db,
+                attempt=attempt,
+                next_status="needs_review",
+                provider_reference=attempt.provider_reference,
+                provider_transaction_reference=(
+                    attempt.provider_transaction_reference
+                ),
+            )
+        except ValueError:
+            attempt.error_message = (
+                "Payment request could not be moved "
+                "to needs_review."
+            )
+            db.add(attempt)
+
         return
 
     if event.verification_status != "verified":
