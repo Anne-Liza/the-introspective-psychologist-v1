@@ -29,6 +29,14 @@ function AttemptReview({
   const needsReview =
     attempt.status === "needs_review";
 
+  const verificationUnavailable = [
+    "stk_query_rejected",
+    "stk_query_uncertain",
+    "stk_query_auth_error",
+    "stk_query_configuration_error",
+    "stk_verification_deferred",
+  ].includes(attempt.error_code || "");
+
   if (!needsReview) {
     return (
       <div className="space-y-2">
@@ -63,9 +71,13 @@ function AttemptReview({
         </p>
 
         <p className="mt-2 leading-6 text-amber-900">
-          {cancelledCallback
-            ? "The customer cancelled the M-Pesa prompt, but M-Pesa returned conflicting information when the payment was checked."
-            : "The payment provider did not return enough consistent information to confirm the final payment status."}
+          {verificationUnavailable
+            ? cancelledCallback
+              ? "The customer cancelled the M-Pesa prompt, but M-Pesa could not complete the verification check."
+              : "M-Pesa could not complete the verification check, so the final payment status has not been confirmed."
+            : cancelledCallback
+              ? "The customer cancelled the M-Pesa prompt, but M-Pesa returned conflicting information when the payment was checked."
+              : "The payment provider did not return enough consistent information to confirm the final payment status."}
         </p>
 
         <p className="mt-3 font-medium leading-6 text-amber-950">

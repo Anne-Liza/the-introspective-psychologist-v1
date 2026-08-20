@@ -24,6 +24,7 @@ from app.modules.mpesa_payments.service import (
     initiate_public_stk_push,
     prepare_public_stk_push_attempt,
     prepare_stk_push_attempt,
+    mark_mpesa_verification_deferred,
     record_mpesa_callback_event,
     verify_mpesa_provider_event,
 )
@@ -326,31 +327,59 @@ def receive_mpesa_stk_callback(
                 type(exc).__name__
             )
 
-            db.refresh(event)
+            if isinstance(
+                exc,
+                MpesaQueryRejectedError,
+            ):
+                deferred_error_code = (
+                    "stk_query_rejected"
+                )
+            elif isinstance(
+                exc,
+                MpesaQueryUncertainError,
+            ):
+                deferred_error_code = (
+                    "stk_query_uncertain"
+                )
+            elif isinstance(exc, MpesaOAuthError):
+                deferred_error_code = (
+                    "stk_query_auth_error"
+                )
+            elif isinstance(
+                exc,
+                MpesaConfigurationError,
+            ):
+                deferred_error_code = (
+                    "stk_query_configuration_error"
+                )
+            else:
+                deferred_error_code = (
+                    "stk_verification_deferred"
+                )
 
-            deferred_note = (
-                "Automatic Daraja verification "
-                "was deferred "
-                f"({automatic_verification_error})."
+            provider_code = getattr(
+                exc,
+                "code",
+                None,
             )
 
-            current_notes = (
-                event.notes or ""
-            ).strip()
+            safe_message = str(exc).strip() or (
+                "M-Pesa verification could not "
+                "be completed."
+            )
 
-            if deferred_note not in current_notes:
-                event.notes = (
-                    (
-                        current_notes
-                        + "\n\n"
-                    )
-                    if current_notes
-                    else ""
-                ) + deferred_note
+            if provider_code:
+                safe_message = (
+                    f"{safe_message} "
+                    f"(provider code {provider_code})"
+                )
 
-                db.add(event)
-                db.commit()
-                db.refresh(event)
+            event = mark_mpesa_verification_deferred(
+                db,
+                event=event,
+                error_code=deferred_error_code,
+                error_message=safe_message,
+            )
 
     record_audit_event(
         db,
