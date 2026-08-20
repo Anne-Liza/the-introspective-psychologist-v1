@@ -1,7 +1,130 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { DataState } from "../../../components/data/DataState";
-import { fetchPaymentAttempts } from "../lib/paymentAttemptsApi";
+import {
+  fetchPaymentAttempts,
+  type PaymentAttempt,
+} from "../lib/paymentAttemptsApi";
+
+function friendlyLabel(value: string) {
+  return value
+    .split("_")
+    .join(" ")
+    .replace(
+      /\b\w/g,
+      (letter: string) => letter.toUpperCase(),
+    );
+}
+
+function AttemptReview({
+  attempt,
+}: {
+  attempt: PaymentAttempt;
+}) {
+  const cancelledCallback =
+    attempt.provider_events.some(
+      (event) => event.event_status === "cancelled",
+    );
+
+  const needsReview =
+    attempt.status === "needs_review";
+
+  if (!needsReview) {
+    return (
+      <div className="space-y-2">
+        {attempt.provider_events
+          .slice(-3)
+          .map((event) => (
+            <div
+              className="text-slate-600"
+              key={event.id}
+            >
+              <div className="font-medium">
+                {friendlyLabel(event.event_type)}
+              </div>
+              <div className="text-slate-500">
+                {friendlyLabel(event.event_status)}
+                {" / "}
+                {friendlyLabel(
+                  event.verification_status,
+                )}
+              </div>
+            </div>
+          ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-w-[22rem]">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p className="font-semibold text-amber-950">
+          Payment needs review
+        </p>
+
+        <p className="mt-2 leading-6 text-amber-900">
+          {cancelledCallback
+            ? "The customer cancelled the M-Pesa prompt, but M-Pesa returned conflicting information when the payment was checked."
+            : "The payment provider did not return enough consistent information to confirm the final payment status."}
+        </p>
+
+        <p className="mt-3 font-medium leading-6 text-amber-950">
+          Keep the order unpaid. Check the M-Pesa
+          transaction before asking the customer to
+          pay again.
+        </p>
+      </div>
+
+      <details className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <summary className="cursor-pointer font-semibold text-slate-700">
+          Technical details
+        </summary>
+
+        <div className="mt-3 space-y-3 text-xs text-slate-600">
+          <div>
+            <span className="font-semibold">
+              Error code:
+            </span>{" "}
+            {attempt.error_code || "None"}
+          </div>
+
+          <div>
+            <span className="font-semibold">
+              Reason:
+            </span>{" "}
+            {attempt.error_message ||
+              "No technical reason recorded."}
+          </div>
+
+          {attempt.provider_events
+            .slice(-3)
+            .map((event) => (
+              <div
+                className="border-t border-slate-200 pt-3"
+                key={event.id}
+              >
+                <div className="font-semibold">
+                  {event.event_type}
+                </div>
+                <div>
+                  Outcome: {event.event_status}
+                </div>
+                <div>
+                  Verification:{" "}
+                  {event.verification_status}
+                </div>
+                {event.notes ? (
+                  <div className="mt-1">
+                    {event.notes}
+                  </div>
+                ) : null}
+              </div>
+            ))}
+        </div>
+      </details>
+    </div>
+  );
+}
 
 export function PaymentAttemptsPage() {
   const attemptsQuery = useQuery({
@@ -105,48 +228,20 @@ export function PaymentAttemptsPage() {
 
                     <td className="p-4">
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {attempt.status}
+                        {friendlyLabel(attempt.status)}
                       </span>
                     </td>
 
                     <td className="p-4">
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {
-                          attempt.verification_status
-                        }
+                        {friendlyLabel(
+                          attempt.verification_status,
+                        )}
                       </span>
                     </td>
 
                     <td className="p-4">
-                      {attempt.provider_events
-                        .slice(-3)
-                        .map((event) => (
-                          <div
-                            className="mb-2 text-slate-600"
-                            key={event.id}
-                          >
-                            <div>
-                              {event.event_type}
-                            </div>
-                            <div className="text-slate-500">
-                              {event.event_status} /{" "}
-                              {
-                                event.verification_status
-                              }
-                              {event.is_duplicate
-                                ? " / duplicate"
-                                : ""}
-                            </div>
-                            {event.provider_transaction_reference ? (
-                              <div className="text-slate-500">
-                                Transaction:{" "}
-                                {
-                                  event.provider_transaction_reference
-                                }
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
+                      <AttemptReview attempt={attempt} />
                     </td>
                   </tr>
                 ),

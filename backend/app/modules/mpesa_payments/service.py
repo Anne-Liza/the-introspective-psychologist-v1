@@ -624,6 +624,17 @@ def parse_mpesa_callback(payload: dict) -> MpesaCallbackParseResult:
 MPESA_CUSTOMER_CANCELLED_RESULT_CODE = 1032
 
 
+def mpesa_result_code_mismatch_reason(
+    callback_result_code: int,
+    query_result_code: int,
+) -> str:
+    return (
+        f"Callback ResultCode {callback_result_code} "
+        "does not match Daraja STK query "
+        f"ResultCode {query_result_code}."
+    )
+
+
 def mpesa_event_status_from_result_code(
     result_code: int | None,
 ) -> str:
@@ -1038,9 +1049,9 @@ def _validate_mpesa_query_agreement(
             db,
             event=event,
             attempt=attempt,
-            reason=(
-                "Callback and status-query "
-                "ResultCode values do not agree."
+            reason=mpesa_result_code_mismatch_reason(
+                callback_result_code,
+                query_result_code,
             ),
         )
 
