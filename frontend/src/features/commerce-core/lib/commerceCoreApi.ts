@@ -84,6 +84,47 @@ export async function fetchCommerceItems(): Promise<CommerceItem[]> {
   return (await apiClient.get("/commerce-core/items")).data;
 }
 
+export type CommerceItemPayload = {
+  name: string;
+  slug: string;
+  item_type?: string;
+  summary?: string | null;
+  description?: string | null;
+  category?: string | null;
+  linked_service_id?: string | null;
+  price_amount?: string;
+  currency?: string;
+  sku?: string | null;
+  stock_quantity?: number | null;
+  session_credit_count?: number | null;
+  fulfillment_type?: string;
+  image_url?: string | null;
+  sort_order?: number;
+  is_featured?: boolean;
+  is_published?: boolean;
+};
+
+export async function createCommerceItem(
+  payload: CommerceItemPayload,
+): Promise<CommerceItem> {
+  return (await apiClient.post("/commerce-core/items", payload)).data;
+}
+
+export async function updateCommerceItem({
+  id,
+  data,
+}: {
+  id: string;
+  data: Partial<CommerceItemPayload>;
+}): Promise<CommerceItem> {
+  return (await apiClient.patch(`/commerce-core/items/${id}`, data)).data;
+}
+
+export async function deleteCommerceItem(id: string): Promise<void> {
+  await apiClient.delete(`/commerce-core/items/${id}`);
+}
+
+
 export async function fetchCommerceOrders(): Promise<CommerceOrder[]> {
   return (await apiClient.get("/commerce-core/orders")).data;
 }
