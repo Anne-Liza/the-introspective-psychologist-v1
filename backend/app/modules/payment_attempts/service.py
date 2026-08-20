@@ -311,6 +311,31 @@ def apply_event_to_attempt_and_request(
             attempt.error_message = "Payment request could not be moved to paid."
             db.add(attempt)
 
+    elif payload.event_status == "cancelled":
+        attempt.status = "cancelled"
+        db.add(attempt)
+
+        try:
+            update_payment_request_after_verified_event(
+                db,
+                attempt=attempt,
+                next_status="cancelled",
+                provider_reference=(
+                    attempt.provider_reference
+                ),
+                provider_transaction_reference=(
+                    attempt
+                    .provider_transaction_reference
+                ),
+            )
+        except ValueError:
+            attempt.status = "needs_review"
+            attempt.error_message = (
+                "Payment request could not be "
+                "moved to cancelled."
+            )
+            db.add(attempt)
+
     elif payload.event_status in FAILED_EVENT_STATUSES:
         attempt.status = "failed"
         db.add(attempt)
@@ -330,7 +355,10 @@ def apply_event_to_attempt_and_request(
             )
         except ValueError:
             attempt.status = "needs_review"
-            attempt.error_message = "Payment request could not be moved to failed."
+            attempt.error_message = (
+                "Payment request could not be "
+                "moved to failed."
+            )
             db.add(attempt)
 
     elif payload.event_status in {"pending", "processing", "received"}:

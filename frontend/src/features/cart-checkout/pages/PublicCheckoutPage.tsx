@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, CircleAlert, LockKeyhole } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, LoaderCircle, LockKeyhole, Smartphone } from "lucide-react";
 import { FormEvent, useState } from "react";
 import { Link } from "react-router";
 
@@ -138,22 +138,54 @@ export function PublicCheckoutPage() {
   const paymentIsPaid = paymentStatus?.status === "paid";
   const paymentNeedsReview =
     paymentStatus?.status === "needs_review";
+  const paymentIsCancelled =
+    paymentStatus?.status === "cancelled";
   const paymentIsFailed =
     paymentStatus?.status === "failed" ||
-    paymentStatus?.status === "cancelled" ||
     paymentStatus?.status === "expired";
+
+  if (checkoutMutation.isPending && !result) {
+    return (
+      <main className="bg-[#fbfaf5]">
+        <section className="mx-auto flex min-h-[38rem] max-w-3xl flex-col items-center justify-center px-5 py-20 text-center">
+          <LoaderCircle
+            aria-hidden="true"
+            className="h-16 w-16 animate-spin text-[#556b2f]"
+          />
+
+          <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">
+            Connecting to M-Pesa
+          </p>
+
+          <h1 className="mt-3 font-serif text-5xl text-[#26311f]">
+            Sending the payment prompt…
+          </h1>
+
+          <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
+            We are sending the M-Pesa payment request to your phone.
+            This may take a few seconds. Keep this page open.
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   if (result) {
     return (
       <main className="bg-[#fbfaf5]">
         <section className="mx-auto flex min-h-[38rem] max-w-3xl flex-col items-center justify-center px-5 py-20 text-center">
-          {paymentIsFailed || paymentNeedsReview ? (
+          {paymentIsPaid ? (
+            <CheckCircle2
+              aria-hidden="true"
+              className="h-16 w-16 text-[#556b2f]"
+            />
+          ) : paymentIsCancelled || paymentIsFailed || paymentNeedsReview ? (
             <CircleAlert
               aria-hidden="true"
               className="h-16 w-16 text-[#a45c4b]"
             />
           ) : (
-            <CheckCircle2
+            <Smartphone
               aria-hidden="true"
               className="h-16 w-16 text-[#556b2f]"
             />
@@ -162,31 +194,37 @@ export function PublicCheckoutPage() {
           <p className="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-[#6a7a4e]">
             {paymentIsPaid
               ? "Payment confirmed"
-              : paymentNeedsReview
-                ? "Payment not confirmed"
-                : paymentIsFailed
-                  ? "Payment incomplete"
-                  : "Waiting for M-Pesa"}
+              : paymentIsCancelled
+                ? "Payment cancelled"
+                : paymentNeedsReview
+                  ? "Payment not confirmed"
+                  : paymentIsFailed
+                    ? "Payment incomplete"
+                    : "Waiting for M-Pesa"}
           </p>
 
           <h1 className="mt-3 font-serif text-5xl text-[#26311f]">
             {paymentIsPaid
               ? "Payment successful."
-              : paymentNeedsReview
-                ? "Your payment has not been confirmed."
-                : paymentIsFailed
-                  ? "Your payment was not completed."
-                  : "Confirm the payment on your phone."}
+              : paymentIsCancelled
+                ? "Your M-Pesa payment was cancelled."
+                : paymentNeedsReview
+                  ? "Your payment has not been confirmed."
+                  : paymentIsFailed
+                    ? "Your payment was not completed."
+                    : "Confirm the payment on your phone."}
           </h1>
 
           <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
             {paymentIsPaid
               ? "M-Pesa has confirmed your payment and your order is now paid."
-              : paymentNeedsReview
-                ? "We have not received a verified payment confirmation from M-Pesa. Your order remains unpaid."
-                : paymentIsFailed
-                  ? "The M-Pesa transaction was cancelled, failed, or expired. Your order has not been marked as paid."
-                  : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
+              : paymentIsCancelled
+                ? "The payment was cancelled on your phone. Your order remains unpaid."
+                : paymentNeedsReview
+                  ? "We have not received a verified payment confirmation from M-Pesa. Your order remains unpaid."
+                  : paymentIsFailed
+                    ? "The M-Pesa payment failed or expired. Your order remains unpaid."
+                    : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
           </p>
           <dl className="mt-8 grid w-full gap-3 rounded-[2rem] border border-[#dfe5d6] bg-white p-7 text-left sm:grid-cols-3">
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Order</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.order.order_number}</dd></div>

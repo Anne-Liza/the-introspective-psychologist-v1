@@ -621,12 +621,29 @@ def parse_mpesa_callback(payload: dict) -> MpesaCallbackParseResult:
     return MpesaCallbackParseResult(**parsed)
 
 
+MPESA_CUSTOMER_CANCELLED_RESULT_CODE = 1032
+
+
+def mpesa_event_status_from_result_code(
+    result_code: int | None,
+) -> str:
+    if result_code == 0:
+        return "succeeded"
+
+    if result_code == MPESA_CUSTOMER_CANCELLED_RESULT_CODE:
+        return "cancelled"
+
+    return "failed"
+
+
 def callback_result_to_provider_event(
     result: MpesaCallbackParseResult,
     *,
     payment_attempt_id: str | None = None,
 ) -> PaymentProviderEventCreate:
-    event_status = "succeeded" if result.result_code == 0 else "failed"
+    event_status = mpesa_event_status_from_result_code(
+        result.result_code
+    )
     amount = Decimal(str(result.amount)) if result.amount is not None else None
 
     return PaymentProviderEventCreate(
@@ -1028,9 +1045,9 @@ def _validate_mpesa_query_agreement(
         )
 
     expected_event_status = (
-        "succeeded"
-        if query_result_code == 0
-        else "failed"
+        mpesa_event_status_from_result_code(
+            query_result_code
+        )
     )
 
     if event.event_status != expected_event_status:
