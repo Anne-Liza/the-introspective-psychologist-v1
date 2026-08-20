@@ -45,6 +45,7 @@ import { MpesaPaymentsPage } from "../features/mpesa-payments/pages/MpesaPayment
 import { PaymentAttemptsPage } from "../features/payment-attempts/pages/PaymentAttemptsPage";
 import { PaymentRequestsPage } from "../features/payment-requests/pages/PaymentRequestsPage";
 import { ReceiptsPage } from "../features/receipts/pages/ReceiptsPage";
+import { PublicReceiptPage } from "../features/receipts/pages/PublicReceiptPage";
 import { ServicesPage } from "../features/services/pages/ServicesPage";
 import { TherapistProfilesPage } from "../features/therapist-profiles/pages/TherapistProfilesPage";
 import { MyTherapistProfilePage } from "../features/therapist-profiles/pages/MyTherapistProfilePage";
@@ -54,6 +55,7 @@ export function App() {
     <>
       <SEO />
       <Routes>
+        <Route path="/receipt/:paymentRequestId" element={<PublicReceiptPage />} />
         <Route element={<PublicLayout />}>
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -108,3 +108,28 @@ class ReceiptRead(BaseModel):
     events: list[ReceiptEventRead] = []
 
     model_config = {"from_attributes": True}
+
+
+class PublicReceiptOrderItemRead(BaseModel):
+    item_name: str
+    quantity: int
+    unit_amount: Decimal
+    line_total_amount: Decimal
+    currency: str
+
+    model_config = {"from_attributes": True}
+
+
+class PublicReceiptRead(BaseModel):
+    receipt_number: str
+    status: str
+    issued_at: datetime
+    amount: Decimal
+    currency: str
+    provider: str
+    provider_transaction_reference: str | None = None
+    order_number: str
+    order_created_at: datetime
+    customer_name: str
+    items: list[PublicReceiptOrderItemRead] = []
+

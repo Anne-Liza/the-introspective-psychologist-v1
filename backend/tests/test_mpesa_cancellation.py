@@ -70,3 +70,15 @@ def test_verified_cancelled_event_stays_cancelled(
 
     assert len(transitions) == 1
     assert transitions[0]["next_status"] == "cancelled"
+
+
+def test_mpesa_result_code_mismatch_reason_includes_both_codes():
+    reason = mpesa.mpesa_result_code_mismatch_reason(
+        1032,
+        1,
+    )
+
+    assert "1032" in reason
+    assert "1" in reason
+    assert "Daraja STK query" in reason
+
