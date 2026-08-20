@@ -1,6 +1,7 @@
 from hashlib import sha256
 from decimal import Decimal
 import json
+import time
 
 import httpx
 
@@ -693,6 +694,9 @@ MPESA_STK_QUERY_VERIFICATION_MARKER = (
     "Verified through Daraja STK status query."
 )
 
+MPESA_STK_TRANSIENT_QUERY_RESULT_CODES = {4999}
+MPESA_STK_QUERY_RETRY_DELAYS_SECONDS = (1.0, 2.0)
+
 
 def _append_mpesa_note(
     existing: str | None,
@@ -726,6 +730,16 @@ def _coerce_mpesa_result_code(
         ValueError,
     ):
         return None
+
+
+
+def mpesa_stk_query_result_is_transient(
+    result_code: int | None,
+) -> bool:
+    return (
+        result_code
+        in MPESA_STK_TRANSIENT_QUERY_RESULT_CODES
+    )
 
 
 def query_mpesa_provider_event(
@@ -821,28 +835,65 @@ def query_mpesa_provider_event(
             resolved_client.close()
 
 
+def _query_mpesa_provider_event_with_retry(
+    db: Session,
+    *,
+    provider_event_id: str,
+    config: MpesaAdapterConfig | None = None,
+    client: httpx.Client | None = None,
+) -> dict:
+    query_result = query_mpesa_provider_event(
+        db,
+        provider_event_id=provider_event_id,
+        config=config,
+        client=client,
+    )
+
+    for delay_seconds in (
+        MPESA_STK_QUERY_RETRY_DELAYS_SECONDS
+    ):
+        result_code = _coerce_mpesa_result_code(
+            query_result.get("ResultCode")
+        )
+
+        if not mpesa_stk_query_result_is_transient(
+            result_code
+        ):
+            return query_result
+
+        time.sleep(delay_seconds)
+
+        query_result = query_mpesa_provider_event(
+            db,
+            provider_event_id=provider_event_id,
+            config=config,
+            client=client,
+        )
+
+    return query_result
+
+
 def _reject_mpesa_event_after_query(
     db: Session,
     *,
     event: PaymentProviderEvent,
     attempt: PaymentAttempt,
     reason: str,
+    error_code: str = "stk_query_mismatch",
 ) -> PaymentProviderEvent:
     event.verification_status = "rejected"
     event.processed_at = utc_now()
     event.notes = _append_mpesa_note(
         event.notes,
         (
-            "Daraja STK status-query evidence "
-            f"did not match the callback. {reason}"
+            "Daraja STK status-query verification "
+            f"could not confirm the callback. {reason}"
         ),
     )
 
     attempt.status = "needs_review"
     attempt.verification_status = "rejected"
-    attempt.error_code = (
-        "stk_query_mismatch"
-    )
+    attempt.error_code = error_code
     attempt.error_message = reason
 
     payment_request = db.get(
@@ -1044,6 +1095,22 @@ def _validate_mpesa_query_agreement(
             ),
         )
 
+    if mpesa_stk_query_result_is_transient(
+        query_result_code
+    ):
+        return _reject_mpesa_event_after_query(
+            db,
+            event=event,
+            attempt=attempt,
+            error_code="stk_query_unresolved",
+            reason=(
+                "Daraja STK query remained "
+                "transient with ResultCode "
+                f"{query_result_code} after "
+                "bounded retries."
+            ),
+        )
+
     if callback_result_code != query_result_code:
         return _reject_mpesa_event_after_query(
             db,
@@ -1114,11 +1181,13 @@ def verify_mpesa_provider_event(
     )
 
     if not query_evidence_exists:
-        query_result = query_mpesa_provider_event(
-            db,
-            provider_event_id=provider_event_id,
-            config=config,
-            client=client,
+        query_result = (
+            _query_mpesa_provider_event_with_retry(
+                db,
+                provider_event_id=provider_event_id,
+                config=config,
+                client=client,
+            )
         )
 
         rejected_event = (

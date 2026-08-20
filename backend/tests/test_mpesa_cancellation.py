@@ -82,3 +82,50 @@ def test_mpesa_result_code_mismatch_reason_includes_both_codes():
     assert "1" in reason
     assert "Daraja STK query" in reason
 
+
+def test_mpesa_4999_query_result_is_transient():
+    assert mpesa.mpesa_stk_query_result_is_transient(
+        4999
+    )
+    assert not mpesa.mpesa_stk_query_result_is_transient(
+        1032
+    )
+
+
+def test_mpesa_query_retries_transient_4999(
+    monkeypatch,
+):
+    results = [
+        {"ResultCode": 4999},
+        {"ResultCode": "4999"},
+        {"ResultCode": 1032},
+    ]
+    calls = []
+    sleeps = []
+
+    def fake_query(*_args, **_kwargs):
+        calls.append(True)
+        return results.pop(0)
+
+    monkeypatch.setattr(
+        mpesa,
+        "query_mpesa_provider_event",
+        fake_query,
+    )
+    monkeypatch.setattr(
+        mpesa.time,
+        "sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
+
+    result = (
+        mpesa._query_mpesa_provider_event_with_retry(
+            SimpleNamespace(),
+            provider_event_id="event-1",
+        )
+    )
+
+    assert result["ResultCode"] == 1032
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+
