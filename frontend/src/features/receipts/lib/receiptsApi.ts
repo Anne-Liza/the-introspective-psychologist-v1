@@ -78,3 +78,37 @@ export async function updateReceipt({
     )
   ).data;
 }
+
+
+export type PublicReceiptOrderItem = {
+  item_name: string;
+  quantity: number;
+  unit_amount: string;
+  line_total_amount: string;
+  currency: string;
+};
+
+export type PublicReceipt = {
+  receipt_number: string;
+  status: "issued" | "voided";
+  issued_at: string;
+  amount: string;
+  currency: string;
+  provider: string;
+  provider_transaction_reference: string | null;
+  order_number: string;
+  order_created_at: string;
+  customer_name: string;
+  items: PublicReceiptOrderItem[];
+};
+
+export async function fetchPublicReceipt(
+  paymentRequestId: string,
+): Promise<PublicReceipt> {
+  return (
+    await apiClient.get(
+      `/receipts/public/by-payment-request/${paymentRequestId}`,
+    )
+  ).data;
+}
+

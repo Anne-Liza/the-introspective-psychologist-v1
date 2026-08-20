@@ -96,7 +96,8 @@ export function SEO() {
     );
 
     const shouldNoIndex =
-      noIndexRoutes.has(path);
+      noIndexRoutes.has(path) ||
+      path.startsWith("/receipt/");
 
     document.title = title;
 

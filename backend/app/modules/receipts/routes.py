@@ -1,10 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit_events import AuditAction, record_audit_event
 from app.core.database import get_db
+from app.core.rate_limit import enforce_public_action_rate_limit
+from app.modules.commerce_core.models import CommerceOrder, CommerceOrderItem
 from app.modules.auth.dependencies import require_permission
-from app.modules.receipts.schemas import ReceiptCreateFromPaymentRequest, ReceiptRead, ReceiptUpdate
+from app.modules.receipts.models import ReceiptRecord
+from app.modules.receipts.schemas import (
+    PublicReceiptOrderItemRead,
+    PublicReceiptRead,
+    ReceiptCreateFromPaymentRequest,
+    ReceiptRead,
+    ReceiptUpdate,
+)
 from app.modules.receipts.service import (
     create_receipt_from_payment_request,
     get_receipt_with_events,
@@ -14,6 +24,86 @@ from app.modules.receipts.service import (
 from app.modules.users.models import User
 
 router = APIRouter()
+
+
+@router.get(
+    "/public/by-payment-request/{payment_request_id}",
+    response_model=PublicReceiptRead,
+)
+def get_public_receipt(
+    payment_request_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    enforce_public_action_rate_limit(
+        request,
+        scope="checkout_payment_status",
+    )
+
+    receipt = db.scalar(
+        select(ReceiptRecord).where(
+            ReceiptRecord.payment_request_id
+            == payment_request_id
+        )
+    )
+
+    if (
+        receipt is None
+        or receipt.commerce_order_id is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt not found.",
+        )
+
+    order = db.scalar(
+        select(CommerceOrder).where(
+            CommerceOrder.id
+            == receipt.commerce_order_id
+        )
+    )
+
+    if order is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Receipt not found.",
+        )
+
+    items = db.scalars(
+        select(CommerceOrderItem)
+        .where(
+            CommerceOrderItem.order_id == order.id
+        )
+        .order_by(
+            CommerceOrderItem.sort_order,
+            CommerceOrderItem.created_at,
+        )
+    ).all()
+
+    return PublicReceiptRead(
+        receipt_number=receipt.receipt_number,
+        status=receipt.status,
+        issued_at=receipt.issued_at,
+        amount=receipt.amount,
+        currency=receipt.currency,
+        provider=receipt.provider,
+        provider_transaction_reference=(
+            receipt.provider_transaction_reference
+        ),
+        order_number=order.order_number,
+        order_created_at=order.created_at,
+        customer_name=receipt.customer_name,
+        items=[
+            PublicReceiptOrderItemRead(
+                item_name=item.item_name,
+                quantity=item.quantity,
+                unit_amount=item.unit_amount,
+                line_total_amount=item.line_total_amount,
+                currency=item.currency,
+            )
+            for item in items
+        ],
+    )
 
 
 @router.get("", response_model=list[ReceiptRead])

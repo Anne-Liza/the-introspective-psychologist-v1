@@ -269,6 +269,15 @@ export function PublicCheckoutPage() {
           ) : null}
 
           <div className="mt-8 flex flex-wrap justify-center gap-3">
+            {paymentIsPaid && paymentStatus?.receipt_number ? (
+              <Link
+                to={`/receipt/${result.paymentRequest.id}`}
+                className="rounded-full bg-[#556b2f] px-6 py-3 font-semibold text-white"
+              >
+                View receipt
+              </Link>
+            ) : null}
+
             {paymentNeedsReview ? (
               <>
                 <Link
