@@ -933,6 +933,81 @@ def _reject_mpesa_event_after_query(
     return event
 
 
+def mark_mpesa_verification_deferred(
+    db: Session,
+    *,
+    event: PaymentProviderEvent,
+    error_code: str,
+    error_message: str,
+) -> PaymentProviderEvent:
+    if event.payment_attempt_id is None:
+        raise ValueError(
+            "M-Pesa provider event is not matched "
+            "to a payment attempt."
+        )
+
+    attempt = db.get(
+        PaymentAttempt,
+        event.payment_attempt_id,
+    )
+
+    if attempt is None:
+        raise ValueError(
+            "The matched M-Pesa payment attempt "
+            "no longer exists."
+        )
+
+    event.notes = _append_mpesa_note(
+        event.notes,
+        (
+            "Automatic Daraja verification was "
+            f"deferred. {error_message}"
+        ),
+    )
+
+    attempt.status = "needs_review"
+    attempt.verification_status = "unverified"
+    attempt.error_code = error_code
+    attempt.error_message = error_message
+
+    payment_request = db.get(
+        PaymentRequest,
+        attempt.payment_request_id,
+    )
+
+    if (
+        payment_request is not None
+        and payment_request.status in {
+            "pending",
+            "processing",
+        }
+    ):
+        previous_status = payment_request.status
+        payment_request.status = "needs_review"
+
+        create_payment_request_event(
+            db,
+            payment_request=payment_request,
+            event_type="payment_request.needs_review",
+            from_status=previous_status,
+            to_status="needs_review",
+            notes=(
+                "Automatic M-Pesa verification "
+                "could not confirm the final "
+                "transaction status."
+            ),
+        )
+
+        db.add(payment_request)
+
+    db.add(event)
+    db.add(attempt)
+    db.commit()
+    db.refresh(event)
+
+    return event
+
+
 def _validate_mpesa_query_agreement(
     db: Session,
     *,

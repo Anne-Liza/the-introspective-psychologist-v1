@@ -129,3 +129,93 @@ def test_mpesa_query_retries_transient_4999(
     assert len(calls) == 3
     assert sleeps == [1.0, 2.0]
 
+
+def test_deferred_mpesa_verification_moves_request_to_review(
+    monkeypatch,
+):
+    attempt = SimpleNamespace(
+        id="attempt-1",
+        payment_request_id="payment-1",
+        status="processing",
+        verification_status="unverified",
+        error_code=None,
+        error_message=None,
+    )
+
+    payment_request = SimpleNamespace(
+        id="payment-1",
+        status="processing",
+    )
+
+    event = SimpleNamespace(
+        id="event-1",
+        payment_attempt_id="attempt-1",
+        notes="Request Cancelled by user.",
+    )
+
+    recorded_events = []
+
+    monkeypatch.setattr(
+        mpesa,
+        "create_payment_request_event",
+        lambda _db, **kwargs: recorded_events.append(
+            kwargs
+        ),
+    )
+
+    class DB:
+        def get(self, _model, object_id):
+            if object_id == "attempt-1":
+                return attempt
+            if object_id == "payment-1":
+                return payment_request
+            return None
+
+        def add(self, _obj):
+            pass
+
+        def commit(self):
+            pass
+
+        def refresh(self, _obj):
+            pass
+
+    result = mpesa.mark_mpesa_verification_deferred(
+        DB(),
+        event=event,
+        error_code="stk_query_rejected",
+        error_message=(
+            "M-Pesa rejected the STK status query."
+        ),
+    )
+
+    assert result is event
+    assert attempt.status == "needs_review"
+    assert attempt.verification_status == "unverified"
+    assert attempt.error_code == "stk_query_rejected"
+    assert (
+        attempt.error_message
+        == "M-Pesa rejected the STK status query."
+    )
+
+    assert payment_request.status == "needs_review"
+
+    assert len(recorded_events) == 1
+    assert (
+        recorded_events[0]["event_type"]
+        == "payment_request.needs_review"
+    )
+    assert (
+        recorded_events[0]["from_status"]
+        == "processing"
+    )
+    assert (
+        recorded_events[0]["to_status"]
+        == "needs_review"
+    )
+
+    assert (
+        "Automatic Daraja verification was deferred"
+        in event.notes
+    )
+
