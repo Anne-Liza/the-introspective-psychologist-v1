@@ -1,3 +1,4 @@
+from datetime import timedelta
 from hashlib import sha256
 from decimal import Decimal
 import json
@@ -565,6 +566,10 @@ def initiate_public_stk_push(
         checkout_request_id
     )
 
+    initialize_mpesa_reconciliation(
+        attempt=attempt,
+    )
+
     create_payment_request_event(
         db,
         payment_request=payment_request,
@@ -697,6 +702,706 @@ MPESA_STK_QUERY_VERIFICATION_MARKER = (
 MPESA_STK_TRANSIENT_QUERY_RESULT_CODES = {4999}
 MPESA_STK_QUERY_RETRY_DELAYS_SECONDS = (1.0, 2.0)
 
+MPESA_RECONCILIATION_BACKOFF_SECONDS = (
+    5,
+    15,
+    30,
+    60,
+    120,
+    300,
+)
+MPESA_RECONCILIATION_ACTIVE_STATUSES = {
+    "pending",
+    "retrying",
+}
+
+
+def _persist_mpesa_reconciliation_state(
+    db: Session,
+    attempt: PaymentAttempt,
+) -> PaymentAttempt:
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+    return attempt
+
+
+def initialize_mpesa_reconciliation(
+    *,
+    attempt: PaymentAttempt,
+) -> PaymentAttempt:
+    if attempt.provider != "mpesa":
+        raise ValueError(
+            "Only M-Pesa attempts can be reconciled."
+        )
+
+    if not (attempt.provider_reference or "").strip():
+        raise ValueError(
+            "M-Pesa reconciliation requires a "
+            "CheckoutRequestID."
+        )
+
+    if attempt.reconciliation_status in (
+        MPESA_RECONCILIATION_ACTIVE_STATUSES
+    ):
+        return attempt
+
+    if attempt.reconciliation_status == "completed":
+        return attempt
+
+    if attempt.reconciliation_status == "exhausted":
+        raise ValueError(
+            "Exhausted M-Pesa reconciliation cannot "
+            "be restarted automatically."
+        )
+
+    now = utc_now()
+
+    attempt.reconciliation_status = "pending"
+    attempt.reconciliation_retry_count = 0
+    attempt.reconciliation_last_attempt_at = None
+    attempt.reconciliation_next_attempt_at = (
+        now
+        + timedelta(
+            seconds=(
+                MPESA_RECONCILIATION_BACKOFF_SECONDS[0]
+            )
+        )
+    )
+    attempt.reconciliation_completed_at = None
+    attempt.reconciliation_last_error_code = None
+    attempt.reconciliation_last_error_message = None
+
+    return attempt
+
+
+def schedule_mpesa_reconciliation(
+    db: Session,
+    *,
+    attempt: PaymentAttempt,
+) -> PaymentAttempt:
+    previous_status = (
+        attempt.reconciliation_status
+    )
+
+    initialize_mpesa_reconciliation(
+        attempt=attempt,
+    )
+
+    if (
+        previous_status
+        == attempt.reconciliation_status
+        and previous_status
+        in (
+            MPESA_RECONCILIATION_ACTIVE_STATUSES
+            | {"completed"}
+        )
+    ):
+        return attempt
+
+    return _persist_mpesa_reconciliation_state(
+        db,
+        attempt,
+    )
+
+
+def defer_mpesa_reconciliation(
+    db: Session,
+    *,
+    attempt: PaymentAttempt,
+    error_code: str,
+    error_message: str,
+) -> PaymentAttempt:
+    now = utc_now()
+    retry_count = (
+        attempt.reconciliation_retry_count + 1
+    )
+
+    attempt.reconciliation_retry_count = retry_count
+    attempt.reconciliation_last_attempt_at = now
+    attempt.reconciliation_last_error_code = (
+        error_code
+    )
+    attempt.reconciliation_last_error_message = (
+        error_message
+    )
+
+    if retry_count >= len(
+        MPESA_RECONCILIATION_BACKOFF_SECONDS
+    ):
+        attempt.reconciliation_status = "exhausted"
+        attempt.reconciliation_next_attempt_at = None
+        attempt.reconciliation_completed_at = now
+
+        attempt.status = "needs_review"
+        attempt.error_code = (
+            "mpesa_reconciliation_exhausted"
+        )
+        attempt.error_message = (
+            "Automatic M-Pesa reconciliation "
+            "could not confirm the final "
+            "transaction status. "
+            f"{error_message}"
+        )
+
+        payment_request = db.get(
+            PaymentRequest,
+            attempt.payment_request_id,
+        )
+
+        if (
+            payment_request is not None
+            and payment_request.status
+            in {"pending", "processing"}
+        ):
+            previous_status = (
+                payment_request.status
+            )
+            payment_request.status = (
+                "needs_review"
+            )
+
+            create_payment_request_event(
+                db,
+                payment_request=payment_request,
+                event_type=(
+                    "payment_request.needs_review"
+                ),
+                from_status=previous_status,
+                to_status="needs_review",
+                notes=(
+                    "Automatic M-Pesa "
+                    "reconciliation exhausted "
+                    "its retry window without "
+                    "confirming the final "
+                    "transaction status."
+                ),
+            )
+
+            db.add(payment_request)
+    else:
+        attempt.reconciliation_status = "retrying"
+        attempt.reconciliation_next_attempt_at = (
+            now
+            + timedelta(
+                seconds=(
+                    MPESA_RECONCILIATION_BACKOFF_SECONDS[
+                        retry_count
+                    ]
+                )
+            )
+        )
+        attempt.reconciliation_completed_at = None
+
+    return _persist_mpesa_reconciliation_state(
+        db,
+        attempt,
+    )
+
+
+def complete_mpesa_reconciliation(
+    db: Session,
+    *,
+    attempt: PaymentAttempt,
+) -> PaymentAttempt:
+    now = utc_now()
+
+    attempt.reconciliation_status = "completed"
+    attempt.reconciliation_last_attempt_at = now
+    attempt.reconciliation_next_attempt_at = None
+    attempt.reconciliation_completed_at = now
+    attempt.reconciliation_last_error_code = None
+    attempt.reconciliation_last_error_message = None
+
+    return _persist_mpesa_reconciliation_state(
+        db,
+        attempt,
+    )
+
+
+MPESA_RECONCILIATION_LEASE_SECONDS = 90
+
+
+def claim_next_due_mpesa_reconciliation(
+    db: Session,
+    *,
+    now=None,
+    lease_seconds: int = (
+        MPESA_RECONCILIATION_LEASE_SECONDS
+    ),
+) -> PaymentAttempt | None:
+    if lease_seconds <= 0:
+        raise ValueError(
+            "Reconciliation lease must be "
+            "greater than zero."
+        )
+
+    claim_time = now or utc_now()
+
+    attempt = db.scalar(
+        select(PaymentAttempt)
+        .where(
+            PaymentAttempt.provider == "mpesa",
+            PaymentAttempt.reconciliation_status.in_(
+                tuple(
+                    sorted(
+                        MPESA_RECONCILIATION_ACTIVE_STATUSES
+                    )
+                )
+            ),
+            PaymentAttempt
+            .reconciliation_next_attempt_at
+            .is_not(None),
+            PaymentAttempt
+            .reconciliation_next_attempt_at
+            <= claim_time,
+        )
+        .order_by(
+            PaymentAttempt
+            .reconciliation_next_attempt_at
+            .asc(),
+            PaymentAttempt.created_at.asc(),
+        )
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+
+    if attempt is None:
+        return None
+
+    attempt.reconciliation_last_attempt_at = (
+        claim_time
+    )
+    attempt.reconciliation_next_attempt_at = (
+        claim_time
+        + timedelta(seconds=lease_seconds)
+    )
+
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    return attempt
+
+
+MPESA_TRANSIENT_QUERY_REJECTION_CODES = {
+    "429",
+}
+
+
+def mpesa_query_rejection_is_transient(
+    exc: MpesaQueryRejectedError,
+) -> bool:
+    code = str(
+        getattr(exc, "code", "") or ""
+    ).strip()
+
+    return (
+        code
+        in MPESA_TRANSIENT_QUERY_REJECTION_CODES
+    )
+
+
+def mark_mpesa_reconciliation_requires_review(
+    db: Session,
+    *,
+    attempt: PaymentAttempt,
+    error_code: str,
+    error_message: str,
+) -> PaymentAttempt:
+    now = utc_now()
+
+    attempt.status = "needs_review"
+    attempt.error_code = error_code
+    attempt.error_message = error_message
+
+    attempt.reconciliation_status = "completed"
+    attempt.reconciliation_last_attempt_at = now
+    attempt.reconciliation_next_attempt_at = None
+    attempt.reconciliation_completed_at = now
+    attempt.reconciliation_last_error_code = (
+        error_code
+    )
+    attempt.reconciliation_last_error_message = (
+        error_message
+    )
+
+    payment_request = db.get(
+        PaymentRequest,
+        attempt.payment_request_id,
+    )
+
+    if (
+        payment_request is not None
+        and payment_request.status
+        in {"pending", "processing"}
+    ):
+        previous_status = payment_request.status
+        payment_request.status = "needs_review"
+
+        create_payment_request_event(
+            db,
+            payment_request=payment_request,
+            event_type=(
+                "payment_request.needs_review"
+            ),
+            from_status=previous_status,
+            to_status="needs_review",
+            notes=error_message,
+        )
+
+        db.add(payment_request)
+
+    db.add(attempt)
+    db.commit()
+    db.refresh(attempt)
+
+    return attempt
+
+
+def latest_mpesa_callback_event_for_attempt(
+    db: Session,
+    *,
+    payment_attempt_id: str,
+) -> PaymentProviderEvent | None:
+    return db.scalar(
+        select(PaymentProviderEvent)
+        .where(
+            PaymentProviderEvent.payment_attempt_id
+            == payment_attempt_id,
+            PaymentProviderEvent.provider
+            == "mpesa",
+            PaymentProviderEvent.event_type
+            == "mpesa.stk_callback",
+            PaymentProviderEvent.is_duplicate.is_(
+                False
+            ),
+        )
+        .order_by(
+            PaymentProviderEvent.received_at.desc()
+        )
+        .limit(1)
+    )
+
+
+def process_claimed_mpesa_reconciliation(
+    db: Session,
+    *,
+    attempt: PaymentAttempt,
+    config: MpesaAdapterConfig | None = None,
+    client: httpx.Client | None = None,
+) -> PaymentAttempt:
+    if attempt.provider != "mpesa":
+        raise ValueError(
+            "Only M-Pesa attempts can be reconciled."
+        )
+
+    if attempt.reconciliation_status not in (
+        MPESA_RECONCILIATION_ACTIVE_STATUSES
+    ):
+        return attempt
+
+    event = latest_mpesa_callback_event_for_attempt(
+        db,
+        payment_attempt_id=attempt.id,
+    )
+
+    try:
+        if event is None:
+            query_result = query_mpesa_attempt(
+                attempt=attempt,
+                config=config,
+                client=client,
+            )
+        else:
+            query_result = (
+                query_mpesa_provider_event(
+                    db,
+                    provider_event_id=event.id,
+                    config=config,
+                    client=client,
+                )
+            )
+    except MpesaQueryRejectedError as exc:
+        provider_code = str(
+            getattr(exc, "code", "") or ""
+        ).strip()
+
+        if mpesa_query_rejection_is_transient(
+            exc
+        ):
+            return defer_mpesa_reconciliation(
+                db,
+                attempt=attempt,
+                error_code=(
+                    "stk_query_rate_limited"
+                ),
+                error_message=(
+                    str(exc).strip()
+                    or (
+                        "M-Pesa temporarily "
+                        "rate-limited the status "
+                        "query."
+                    )
+                ),
+            )
+
+        if event is None:
+            return (
+                mark_mpesa_reconciliation_requires_review(
+                    db,
+                    attempt=attempt,
+                    error_code="stk_query_rejected",
+                    error_message=(
+                        (
+                            str(exc).strip()
+                            or (
+                                "M-Pesa rejected the "
+                                "status query."
+                            )
+                        )
+                        + (
+                            f" (provider code "
+                            f"{provider_code})"
+                            if provider_code
+                            else ""
+                        )
+                    ),
+                )
+            )
+
+        mark_mpesa_verification_deferred(
+            db,
+            event=event,
+            error_code="stk_query_rejected",
+            error_message=(
+                (
+                    str(exc).strip()
+                    or (
+                        "M-Pesa rejected the "
+                        "status query."
+                    )
+                )
+                + (
+                    f" (provider code "
+                    f"{provider_code})"
+                    if provider_code
+                    else ""
+                )
+            ),
+        )
+
+        current_attempt = (
+            db.get(PaymentAttempt, attempt.id)
+            or attempt
+        )
+
+        return complete_mpesa_reconciliation(
+            db,
+            attempt=current_attempt,
+        )
+
+    except (
+        MpesaQueryUncertainError,
+        MpesaOAuthError,
+    ) as exc:
+        return defer_mpesa_reconciliation(
+            db,
+            attempt=attempt,
+            error_code=(
+                "stk_query_temporarily_unavailable"
+            ),
+            error_message=(
+                str(exc).strip()
+                or (
+                    "M-Pesa verification is "
+                    "temporarily unavailable."
+                )
+            ),
+        )
+
+    except MpesaConfigurationError as exc:
+        if event is None:
+            return (
+                mark_mpesa_reconciliation_requires_review(
+                    db,
+                    attempt=attempt,
+                    error_code=(
+                        "stk_query_configuration_error"
+                    ),
+                    error_message=str(exc),
+                )
+            )
+
+        mark_mpesa_verification_deferred(
+            db,
+            event=event,
+            error_code=(
+                "stk_query_configuration_error"
+            ),
+            error_message=str(exc),
+        )
+
+        current_attempt = (
+            db.get(PaymentAttempt, attempt.id)
+            or attempt
+        )
+
+        return complete_mpesa_reconciliation(
+            db,
+            attempt=current_attempt,
+        )
+
+    except (LookupError, ValueError) as exc:
+        if event is None:
+            return (
+                mark_mpesa_reconciliation_requires_review(
+                    db,
+                    attempt=attempt,
+                    error_code=(
+                        "stk_reconciliation_error"
+                    ),
+                    error_message=str(exc),
+                )
+            )
+
+        mark_mpesa_verification_deferred(
+            db,
+            event=event,
+            error_code=(
+                "stk_reconciliation_error"
+            ),
+            error_message=str(exc),
+        )
+
+        current_attempt = (
+            db.get(PaymentAttempt, attempt.id)
+            or attempt
+        )
+
+        return complete_mpesa_reconciliation(
+            db,
+            attempt=current_attempt,
+        )
+
+    query_result_code = (
+        _coerce_mpesa_result_code(
+            query_result.get("ResultCode")
+        )
+    )
+
+    if mpesa_stk_query_result_is_transient(
+        query_result_code
+    ):
+        return defer_mpesa_reconciliation(
+            db,
+            attempt=attempt,
+            error_code="stk_query_transient",
+            error_message=(
+                "Daraja returned transient "
+                f"ResultCode {query_result_code}."
+            ),
+        )
+
+    if event is None:
+        if query_result_code is None:
+            return (
+                mark_mpesa_reconciliation_requires_review(
+                    db,
+                    attempt=attempt,
+                    error_code=(
+                        "stk_query_invalid_result"
+                    ),
+                    error_message=(
+                        "Daraja returned an invalid "
+                        "STK Query result code."
+                    ),
+                )
+            )
+
+        query_event_status = (
+            mpesa_event_status_from_result_code(
+                query_result_code
+            )
+        )
+
+        if query_event_status == "succeeded":
+            return defer_mpesa_reconciliation(
+                db,
+                attempt=attempt,
+                error_code=(
+                    "stk_query_success_callback_pending"
+                ),
+                error_message=(
+                    "Daraja reports a successful "
+                    "transaction, but the callback "
+                    "has not arrived. Settlement "
+                    "remains blocked pending "
+                    "complete payment evidence."
+                ),
+            )
+
+        record_provider_event(
+            db,
+            payload=PaymentProviderEventCreate(
+                payment_attempt_id=attempt.id,
+                provider="mpesa",
+                provider_reference=(
+                    attempt.provider_reference
+                ),
+                external_event_id=(
+                    "stk-query-reconciliation:"
+                    f"{attempt.provider_reference}:"
+                    f"{query_result_code}"
+                ),
+                event_type=(
+                    "mpesa.stk_query_reconciliation"
+                ),
+                event_status=query_event_status,
+                verification_status="verified",
+                raw_payload=query_result,
+                notes=(
+                    "Daraja STK Query supplied "
+                    "terminal payment evidence "
+                    "after the callback did not "
+                    "arrive."
+                ),
+            ),
+        )
+
+        current_attempt = (
+            db.get(PaymentAttempt, attempt.id)
+            or attempt
+        )
+
+        return complete_mpesa_reconciliation(
+            db,
+            attempt=current_attempt,
+        )
+
+    verify_mpesa_provider_event(
+        db,
+        provider_event_id=event.id,
+        verified_by_user_id=None,
+        notes=(
+            "Verified during automatic M-Pesa "
+            "reconciliation."
+        ),
+        config=config,
+        client=client,
+        query_result_override=query_result,
+    )
+
+    current_attempt = (
+        db.get(PaymentAttempt, attempt.id)
+        or attempt
+    )
+
+    return complete_mpesa_reconciliation(
+        db,
+        attempt=current_attempt,
+    )
+
 
 def _append_mpesa_note(
     existing: str | None,
@@ -740,6 +1445,61 @@ def mpesa_stk_query_result_is_transient(
         result_code
         in MPESA_STK_TRANSIENT_QUERY_RESULT_CODES
     )
+
+
+def query_mpesa_attempt(
+    *,
+    attempt: PaymentAttempt,
+    config: MpesaAdapterConfig | None = None,
+    client: httpx.Client | None = None,
+) -> dict:
+    if attempt.provider != "mpesa":
+        raise ValueError(
+            "Only M-Pesa payment attempts can "
+            "be queried through Daraja."
+        )
+
+    checkout_request_id = (
+        attempt.provider_reference or ""
+    ).strip()
+
+    if not checkout_request_id:
+        raise ValueError(
+            "The M-Pesa payment attempt is "
+            "missing its CheckoutRequestID."
+        )
+
+    resolved_config = (
+        config or get_mpesa_config()
+    )
+
+    query_payload = build_stk_query_payload(
+        config=resolved_config,
+        checkout_request_id=(
+            checkout_request_id
+        ),
+    )
+
+    owns_client = client is None
+    resolved_client = client or httpx.Client(
+        timeout=20.0
+    )
+
+    try:
+        access_token = fetch_daraja_access_token(
+            config=resolved_config,
+            client=resolved_client,
+        )
+
+        return submit_daraja_stk_query(
+            config=resolved_config,
+            access_token=access_token,
+            payload=query_payload,
+            client=resolved_client,
+        )
+    finally:
+        if owns_client:
+            resolved_client.close()
 
 
 def query_mpesa_provider_event(
@@ -802,37 +1562,12 @@ def query_mpesa_provider_event(
             "does not match the payment attempt."
         )
 
-    resolved_config = (
-        config or get_mpesa_config()
+    return query_mpesa_attempt(
+        attempt=attempt,
+        config=config,
+        client=client,
     )
 
-    query_payload = build_stk_query_payload(
-        config=resolved_config,
-        checkout_request_id=(
-            checkout_request_id
-        ),
-    )
-
-    owns_client = client is None
-    resolved_client = client or httpx.Client(
-        timeout=20.0
-    )
-
-    try:
-        access_token = fetch_daraja_access_token(
-            config=resolved_config,
-            client=resolved_client,
-        )
-
-        return submit_daraja_stk_query(
-            config=resolved_config,
-            access_token=access_token,
-            payload=query_payload,
-            client=resolved_client,
-        )
-    finally:
-        if owns_client:
-            resolved_client.close()
 
 
 def _query_mpesa_provider_event_with_retry(
@@ -1224,6 +1959,7 @@ def verify_mpesa_provider_event(
     notes: str | None = None,
     config: MpesaAdapterConfig | None = None,
     client: httpx.Client | None = None,
+    query_result_override: dict | None = None,
 ) -> PaymentProviderEvent:
     event = db.get(
         PaymentProviderEvent,
@@ -1256,14 +1992,17 @@ def verify_mpesa_provider_event(
     )
 
     if not query_evidence_exists:
-        query_result = (
-            _query_mpesa_provider_event_with_retry(
-                db,
-                provider_event_id=provider_event_id,
-                config=config,
-                client=client,
+        if query_result_override is not None:
+            query_result = query_result_override
+        else:
+            query_result = (
+                _query_mpesa_provider_event_with_retry(
+                    db,
+                    provider_event_id=provider_event_id,
+                    config=config,
+                    client=client,
+                )
             )
-        )
 
         rejected_event = (
             _validate_mpesa_query_agreement(

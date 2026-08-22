@@ -128,6 +128,13 @@ def create_payment_attempt_from_request(
         currency=payment_request.currency,
         status="created",
         verification_status="unverified",
+        reconciliation_status="idle",
+        reconciliation_retry_count=0,
+        reconciliation_last_attempt_at=None,
+        reconciliation_next_attempt_at=None,
+        reconciliation_completed_at=None,
+        reconciliation_last_error_code=None,
+        reconciliation_last_error_message=None,
         checkout_url=payload.checkout_url,
         error_code=None,
         error_message=None,
@@ -267,10 +274,23 @@ def apply_event_to_attempt_and_request(
         return
 
     if event.verification_status != "verified":
-        if attempt.status not in {"succeeded", "failed", "cancelled"}:
-            attempt.status = "needs_review"
-            attempt.verification_status = event.verification_status
+        if attempt.status not in {
+            "succeeded",
+            "failed",
+            "cancelled",
+        }:
+            attempt.verification_status = (
+                event.verification_status
+            )
+
+            if (
+                event.verification_status
+                == "needs_review"
+            ):
+                attempt.status = "needs_review"
+
             db.add(attempt)
+
         return
 
     attempt.verification_status = "verified"

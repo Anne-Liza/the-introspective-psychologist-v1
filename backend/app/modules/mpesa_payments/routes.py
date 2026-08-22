@@ -26,7 +26,11 @@ from app.modules.mpesa_payments.service import (
     prepare_stk_push_attempt,
     mark_mpesa_verification_deferred,
     record_mpesa_callback_event,
+    schedule_mpesa_reconciliation,
     verify_mpesa_provider_event,
+)
+from app.modules.payment_attempts.models import (
+    PaymentAttempt,
 )
 from app.modules.users.models import User
 
@@ -293,8 +297,7 @@ def receive_mpesa_stk_callback(
         force_unverified=True,
     )
 
-    automatic_verification_attempted = False
-    automatic_verification_error = None
+    automatic_reconciliation_scheduled = False
 
     if (
         not event.is_duplicate
@@ -302,83 +305,18 @@ def receive_mpesa_stk_callback(
         and event.verification_status
         == "unverified"
     ):
-        automatic_verification_attempted = True
+        attempt = db.get(
+            PaymentAttempt,
+            event.payment_attempt_id,
+        )
 
-        try:
-            event = verify_mpesa_provider_event(
+        if attempt is not None:
+            schedule_mpesa_reconciliation(
                 db,
-                provider_event_id=event.id,
-                verified_by_user_id=None,
-                notes=(
-                    "Automatically checked "
-                    "against the Daraja STK "
-                    "status query."
-                ),
+                attempt=attempt,
             )
-        except (
-            LookupError,
-            ValueError,
-            MpesaConfigurationError,
-            MpesaOAuthError,
-            MpesaQueryRejectedError,
-            MpesaQueryUncertainError,
-        ) as exc:
-            automatic_verification_error = (
-                type(exc).__name__
-            )
-
-            if isinstance(
-                exc,
-                MpesaQueryRejectedError,
-            ):
-                deferred_error_code = (
-                    "stk_query_rejected"
-                )
-            elif isinstance(
-                exc,
-                MpesaQueryUncertainError,
-            ):
-                deferred_error_code = (
-                    "stk_query_uncertain"
-                )
-            elif isinstance(exc, MpesaOAuthError):
-                deferred_error_code = (
-                    "stk_query_auth_error"
-                )
-            elif isinstance(
-                exc,
-                MpesaConfigurationError,
-            ):
-                deferred_error_code = (
-                    "stk_query_configuration_error"
-                )
-            else:
-                deferred_error_code = (
-                    "stk_verification_deferred"
-                )
-
-            provider_code = getattr(
-                exc,
-                "code",
-                None,
-            )
-
-            safe_message = str(exc).strip() or (
-                "M-Pesa verification could not "
-                "be completed."
-            )
-
-            if provider_code:
-                safe_message = (
-                    f"{safe_message} "
-                    f"(provider code {provider_code})"
-                )
-
-            event = mark_mpesa_verification_deferred(
-                db,
-                event=event,
-                error_code=deferred_error_code,
-                error_message=safe_message,
+            automatic_reconciliation_scheduled = (
+                True
             )
 
     record_audit_event(
@@ -402,11 +340,8 @@ def receive_mpesa_stk_callback(
                 event.verification_status
             ),
             "is_duplicate": event.is_duplicate,
-            "automatic_verification_attempted": (
-                automatic_verification_attempted
-            ),
-            "automatic_verification_error": (
-                automatic_verification_error
+            "automatic_reconciliation_scheduled": (
+                automatic_reconciliation_scheduled
             ),
         },
     )

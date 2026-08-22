@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,12 +11,32 @@ from app.core.rate_limit import add_global_rate_limit
 from app.core.request_context import add_request_id
 from app.core.request_logging import add_request_logging
 from app.core.security_headers import add_security_headers
+from app.workers.mpesa_reconciliation import (
+    mpesa_reconciliation_loop,
+)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate_production_security()
-    yield
+
+    reconciliation_task = None
+
+    if settings.MPESA_RECONCILIATION_ENABLED:
+        reconciliation_task = asyncio.create_task(
+            mpesa_reconciliation_loop()
+        )
+
+    try:
+        yield
+    finally:
+        if reconciliation_task is not None:
+            reconciliation_task.cancel()
+
+            try:
+                await reconciliation_task
+            except asyncio.CancelledError:
+                pass
 
 
 docs_url = "/docs" if settings.API_DOCS_ENABLED and not settings.is_production else None

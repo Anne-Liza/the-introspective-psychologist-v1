@@ -109,25 +109,42 @@ export function PublicCheckoutPage() {
       ),
     enabled: Boolean(result?.paymentRequest.id),
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const payment = query.state.data;
+
+      if (!payment) {
+        return 5000;
+      }
 
       if (
-        status === "paid" &&
-        query.state.data?.receipt_number
+        payment.customer_state === "paid" &&
+        payment.receipt_number
       ) {
         return false;
       }
 
       if (
-        status &&
-        [
-          "failed",
-          "cancelled",
-          "expired",
-          "needs_review",
-        ].includes(status)
+        payment.customer_state ===
+        "not_confirmed"
       ) {
         return false;
+      }
+
+      if (
+        (
+          payment.customer_state ===
+            "cancelled" ||
+          payment.customer_state === "failed"
+        ) &&
+        !payment.confirmation_pending
+      ) {
+        return false;
+      }
+
+      if (
+        payment.customer_state === "paid" &&
+        !payment.receipt_number
+      ) {
+        return 10000;
       }
 
       return 5000;
@@ -135,14 +152,21 @@ export function PublicCheckoutPage() {
   });
 
   const paymentStatus = paymentStatusQuery.data;
-  const paymentIsPaid = paymentStatus?.status === "paid";
+  const customerPaymentState =
+    paymentStatus?.customer_state || "waiting";
+
+  const paymentIsPaid =
+    customerPaymentState === "paid";
+  const paymentIsConfirming =
+    customerPaymentState === "confirming";
   const paymentNeedsReview =
-    paymentStatus?.status === "needs_review";
+    customerPaymentState === "not_confirmed";
   const paymentIsCancelled =
-    paymentStatus?.status === "cancelled";
+    customerPaymentState === "cancelled";
   const paymentIsFailed =
-    paymentStatus?.status === "failed" ||
-    paymentStatus?.status === "expired";
+    customerPaymentState === "failed";
+  const confirmationPending =
+    Boolean(paymentStatus?.confirmation_pending);
 
   if (checkoutMutation.isPending && !result) {
     return (
@@ -200,7 +224,9 @@ export function PublicCheckoutPage() {
                   ? "Payment not confirmed"
                   : paymentIsFailed
                     ? "Payment incomplete"
-                    : "Waiting for M-Pesa"}
+                    : paymentIsConfirming
+                      ? "Confirming payment"
+                      : "Waiting for M-Pesa"}
           </p>
 
           <h1 className="mt-3 font-serif text-5xl text-[#26311f]">
@@ -212,19 +238,27 @@ export function PublicCheckoutPage() {
                   ? "Your payment has not been confirmed."
                   : paymentIsFailed
                     ? "Your payment was not completed."
-                    : "Confirm the payment on your phone."}
+                    : paymentIsConfirming
+                      ? "We’re confirming your payment."
+                      : "Confirm the payment on your phone."}
           </h1>
 
           <p className="mt-5 max-w-2xl leading-8 text-[#5f6d54]">
             {paymentIsPaid
               ? "M-Pesa has confirmed your payment and your order is now paid."
               : paymentIsCancelled
-                ? "The payment was cancelled on your phone. Your order remains unpaid."
+                ? confirmationPending
+                  ? "The M-Pesa prompt was cancelled. Your order remains unpaid while we confirm the final transaction status in the background."
+                  : "The payment was cancelled on your phone. Your order remains unpaid."
                 : paymentNeedsReview
-                  ? "We have not received a verified payment confirmation from M-Pesa. Your order remains unpaid."
+                  ? "We could not automatically confirm the final M-Pesa transaction status. Your order remains unpaid."
                   : paymentIsFailed
-                    ? "The M-Pesa payment failed or expired. Your order remains unpaid."
-                    : "Your M-Pesa prompt was sent successfully. We are waiting for confirmation from M-Pesa and this page will update automatically."}
+                    ? confirmationPending
+                      ? "M-Pesa reported that the payment was not completed. Your order remains unpaid while we confirm the final transaction status."
+                      : "The M-Pesa payment was not completed. Your order remains unpaid."
+                    : paymentIsConfirming
+                      ? "M-Pesa reported that your payment completed. We are verifying the final transaction status before marking your order as paid."
+                      : "Your M-Pesa prompt was sent successfully. We are waiting for your response and this page will update automatically."}
           </p>
           <dl className="mt-8 grid w-full gap-3 rounded-[2rem] border border-[#dfe5d6] bg-white p-7 text-left sm:grid-cols-3">
             <div><dt className="text-xs uppercase tracking-wide text-[#6a7a4e]">Order</dt><dd className="mt-1 font-semibold text-[#26311f]">{result.order.order_number}</dd></div>
@@ -265,6 +299,12 @@ export function PublicCheckoutPage() {
           {paymentNeedsReview ? (
             <p className="mt-5 max-w-2xl font-medium leading-7 text-[#7a4d3a]">
               If your account was charged, contact the practice before making another payment.
+            </p>
+          ) : null}
+
+          {confirmationPending ? (
+            <p className="mt-5 max-w-2xl font-medium leading-7 text-[#52623d]">
+              M-Pesa confirmation is continuing in the background. If you were charged, do not make another payment. You may safely leave this page and return later.
             </p>
           ) : null}
 

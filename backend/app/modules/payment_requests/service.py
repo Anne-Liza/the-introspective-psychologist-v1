@@ -11,6 +11,56 @@ from app.modules.payment_requests.schemas import PaymentRequestCreate, PaymentRe
 
 ACTIVE_PAYMENT_REQUEST_STATUSES = {"pending", "processing", "needs_review"}
 
+PUBLIC_PAYMENT_ACTIVE_RECONCILIATION_STATUSES = {
+    "pending",
+    "retrying",
+}
+
+
+def derive_public_payment_state(
+    *,
+    request_status: str,
+    provider_outcome: str | None = None,
+    reconciliation_status: str | None = None,
+) -> tuple[str, bool]:
+    if request_status == "paid":
+        return "paid", False
+
+    if request_status == "needs_review":
+        return "not_confirmed", False
+
+    if request_status == "cancelled":
+        return "cancelled", False
+
+    if request_status in {"failed", "expired"}:
+        return "failed", False
+
+    reconciliation_active = (
+        reconciliation_status
+        in PUBLIC_PAYMENT_ACTIVE_RECONCILIATION_STATUSES
+    )
+
+    if provider_outcome == "cancelled":
+        return (
+            "cancelled",
+            reconciliation_active,
+        )
+
+    if provider_outcome == "failed":
+        return (
+            "failed",
+            reconciliation_active,
+        )
+
+    if provider_outcome == "succeeded":
+        return "confirming", True
+
+    if request_status == "processing":
+        return "waiting", True
+
+    return "waiting", False
+
+
 ALLOWED_STATUS_TRANSITIONS = {
     "pending": {"processing", "paid", "failed", "expired", "cancelled", "needs_review"},
     "processing": {"paid", "failed", "cancelled", "needs_review"},
