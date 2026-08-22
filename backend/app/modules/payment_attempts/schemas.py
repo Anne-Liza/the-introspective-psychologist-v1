@@ -9,6 +9,13 @@ from app.core.url_safety import validate_external_url
 VALID_PAYMENT_PROVIDERS = {"manual", "mpesa", "stripe", "paystack", "bank_transfer"}
 VALID_ATTEMPT_STATUSES = {"created", "processing", "succeeded", "failed", "cancelled", "needs_review"}
 VALID_VERIFICATION_STATUSES = {"unverified", "verified", "rejected", "duplicate", "needs_review"}
+VALID_RECONCILIATION_STATUSES = {
+    "idle",
+    "pending",
+    "retrying",
+    "completed",
+    "exhausted",
+}
 VALID_EVENT_STATUSES = {"received", "pending", "processing", "succeeded", "failed", "cancelled", "unknown"}
 
 
@@ -185,6 +192,15 @@ class PaymentAttemptRead(BaseModel):
     currency: str
     status: str
     verification_status: str
+
+    reconciliation_status: str
+    reconciliation_retry_count: int
+    reconciliation_last_attempt_at: datetime | None = None
+    reconciliation_next_attempt_at: datetime | None = None
+    reconciliation_completed_at: datetime | None = None
+    reconciliation_last_error_code: str | None = None
+    reconciliation_last_error_message: str | None = None
+
     checkout_url: str | None = None
     error_code: str | None = None
     error_message: str | None = None

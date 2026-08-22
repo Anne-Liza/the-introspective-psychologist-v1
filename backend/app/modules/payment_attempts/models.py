@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -12,7 +12,16 @@ from app.core.time import utc_now
 class PaymentAttempt(Base):
     __tablename__ = "payment_attempts"
     __table_args__ = (
-        UniqueConstraint("provider", "provider_reference", name="uq_payment_attempts_provider_reference"),
+        UniqueConstraint(
+            "provider",
+            "provider_reference",
+            name="uq_payment_attempts_provider_reference",
+        ),
+        Index(
+            "ix_payment_attempts_reconciliation_due",
+            "reconciliation_status",
+            "reconciliation_next_attempt_at",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
@@ -39,6 +48,37 @@ class PaymentAttempt(Base):
 
     status: Mapped[str] = mapped_column(String(80), default="created", nullable=False, index=True)
     verification_status: Mapped[str] = mapped_column(String(80), default="unverified", nullable=False)
+
+    reconciliation_status: Mapped[str] = mapped_column(
+        String(40),
+        default="idle",
+        nullable=False,
+    )
+    reconciliation_retry_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+    reconciliation_last_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    reconciliation_next_attempt_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    reconciliation_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime,
+        nullable=True,
+    )
+    reconciliation_last_error_code: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+    )
+    reconciliation_last_error_message: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
 
     checkout_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(120), nullable=True)

@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     MPESA_TRANSACTION_TYPE: str = "CustomerPayBillOnline"
     MPESA_ACCOUNT_REFERENCE: str = "LaunchKit"
 
+    MPESA_RECONCILIATION_ENABLED: bool = True
+    MPESA_RECONCILIATION_POLL_SECONDS: int = 5
+    MPESA_RECONCILIATION_BATCH_SIZE: int = 10
+
     SENTRY_DSN: str = ""
 
     RATE_LIMIT_ENABLED: bool = True

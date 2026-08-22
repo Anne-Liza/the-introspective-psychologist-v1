@@ -6,6 +6,10 @@ from app.core.audit_events import AuditAction, record_audit_event
 from app.core.database import get_db
 from app.core.rate_limit import enforce_public_action_rate_limit
 from app.modules.auth.dependencies import require_permission
+from app.modules.payment_attempts.models import (
+    PaymentAttempt,
+    PaymentProviderEvent,
+)
 from app.modules.payment_requests.models import PaymentRequest
 from app.modules.payment_requests.schemas import (
     PaymentRequestCreate,
@@ -19,6 +23,7 @@ from app.modules.receipts.models import ReceiptRecord
 from app.modules.payment_requests.service import (
     attach_events,
     create_payment_request_from_order,
+    derive_public_payment_state,
     expire_stale_payment_requests,
     get_payment_request_events,
     get_payment_request_with_events,
@@ -101,6 +106,66 @@ def get_public_payment_status(
         )
     )
 
+    attempt = None
+    callback_event = None
+
+    if payment_request.provider == "mpesa":
+        attempt = db.scalar(
+            select(PaymentAttempt)
+            .where(
+                PaymentAttempt.payment_request_id
+                == payment_request.id,
+                PaymentAttempt.provider == "mpesa",
+            )
+            .order_by(
+                PaymentAttempt.created_at.desc()
+            )
+            .limit(1)
+        )
+
+        if attempt is not None:
+            callback_event = db.scalar(
+                select(PaymentProviderEvent)
+                .where(
+                    PaymentProviderEvent
+                    .payment_attempt_id
+                    == attempt.id,
+                    PaymentProviderEvent.provider
+                    == "mpesa",
+                    PaymentProviderEvent.event_type
+                    == "mpesa.stk_callback",
+                    PaymentProviderEvent.is_duplicate
+                    .is_(False),
+                )
+                .order_by(
+                    PaymentProviderEvent
+                    .received_at.desc()
+                )
+                .limit(1)
+            )
+
+    provider_outcome = (
+        callback_event.event_status
+        if (
+            callback_event is not None
+            and callback_event.event_status
+            in {"succeeded", "cancelled", "failed"}
+        )
+        else None
+    )
+
+    customer_state, confirmation_pending = (
+        derive_public_payment_state(
+            request_status=payment_request.status,
+            provider_outcome=provider_outcome,
+            reconciliation_status=(
+                attempt.reconciliation_status
+                if attempt is not None
+                else None
+            ),
+        )
+    )
+
     return PublicPaymentStatusRead(
         payment_request_id=payment_request.id,
         request_number=payment_request.request_number,
@@ -111,6 +176,9 @@ def get_public_payment_status(
         provider_transaction_reference=(
             payment_request.provider_transaction_reference
         ),
+        customer_state=customer_state,
+        provider_outcome=provider_outcome,
+        confirmation_pending=confirmation_pending,
         receipt_number=(
             receipt.receipt_number
             if receipt is not None

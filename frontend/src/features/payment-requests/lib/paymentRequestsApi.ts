@@ -103,6 +103,21 @@ export type PublicPaymentStatus = {
   currency: string;
   provider: string;
   provider_transaction_reference: string | null;
+
+  customer_state:
+    | "waiting"
+    | "confirming"
+    | "paid"
+    | "cancelled"
+    | "failed"
+    | "not_confirmed";
+  provider_outcome:
+    | "succeeded"
+    | "cancelled"
+    | "failed"
+    | null;
+  confirmation_pending: boolean;
+
   receipt_number: string | null;
   receipt_status: string | null;
 };

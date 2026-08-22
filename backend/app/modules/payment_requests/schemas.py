@@ -95,6 +95,22 @@ class PublicPaymentStatusRead(BaseModel):
     currency: str
     provider: str
     provider_transaction_reference: str | None = None
+
+    customer_state: Literal[
+        "waiting",
+        "confirming",
+        "paid",
+        "cancelled",
+        "failed",
+        "not_confirmed",
+    ] = "waiting"
+    provider_outcome: Literal[
+        "succeeded",
+        "cancelled",
+        "failed",
+    ] | None = None
+    confirmation_pending: bool = False
+
     receipt_number: str | None = None
     receipt_status: str | None = None
 

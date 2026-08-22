@@ -143,3 +143,134 @@ def test_rejected_mpesa_verification_moves_request_to_needs_review(
     assert len(recorded_events) == 1
     assert recorded_events[0]["from_status"] == "processing"
     assert recorded_events[0]["to_status"] == "needs_review"
+
+
+def test_accepted_stk_push_schedules_reconciliation(
+    monkeypatch,
+):
+    payment_request = SimpleNamespace(
+        id="payment-1",
+        request_number="PAY-TEST",
+        target_type="commerce_order",
+        provider="mpesa",
+        amount=Decimal("1500"),
+        currency="KES",
+        expires_at=None,
+        status="pending",
+        description="Store order",
+        provider_reference=None,
+    )
+
+    attempt = SimpleNamespace(
+        id="attempt-1",
+        payment_request_id="payment-1",
+        provider="mpesa",
+        provider_reference=None,
+        provider_session_id=None,
+        amount=Decimal("1500"),
+        status="created",
+        verification_status="unverified",
+        error_code=None,
+        error_message=None,
+        reconciliation_status="idle",
+        reconciliation_retry_count=0,
+        reconciliation_last_attempt_at=None,
+        reconciliation_next_attempt_at=None,
+        reconciliation_completed_at=None,
+        reconciliation_last_error_code=None,
+        reconciliation_last_error_message=None,
+    )
+
+    commit_snapshots = []
+
+    class DB:
+        def execute(self, _statement):
+            return SimpleNamespace(rowcount=1)
+
+        def commit(self):
+            commit_snapshots.append(
+                (
+                    attempt.provider_reference,
+                    attempt.reconciliation_status,
+                    attempt.reconciliation_next_attempt_at,
+                )
+            )
+
+        def rollback(self):
+            pass
+
+        def refresh(self, _instance):
+            pass
+
+        def expire_all(self):
+            pass
+
+        def get(self, model, _id):
+            if model is PaymentRequest:
+                return payment_request
+            return attempt
+
+        def add(self, _instance):
+            pass
+
+    monkeypatch.setattr(
+        mpesa,
+        "prepare_public_stk_push_attempt",
+        lambda *args, **kwargs: attempt,
+    )
+
+    monkeypatch.setattr(
+        mpesa,
+        "build_stk_push_payload",
+        lambda **_kwargs: {},
+    )
+
+    monkeypatch.setattr(
+        mpesa,
+        "fetch_daraja_access_token",
+        lambda **_kwargs: "token",
+    )
+
+    monkeypatch.setattr(
+        mpesa,
+        "submit_daraja_stk_push",
+        lambda **_kwargs: {
+            "MerchantRequestID": "merchant-test",
+            "CheckoutRequestID": "ws_CO_TEST",
+        },
+    )
+
+    monkeypatch.setattr(
+        mpesa,
+        "create_payment_request_event",
+        lambda *args, **kwargs: None,
+    )
+
+    result = mpesa.initiate_public_stk_push(
+        DB(),
+        payment_request_id="payment-1",
+        phone_number="0712345678",
+        config=SimpleNamespace(),
+        client=SimpleNamespace(),
+    )
+
+    assert result is attempt
+    assert attempt.status == "processing"
+    assert (
+        attempt.provider_reference
+        == "ws_CO_TEST"
+    )
+    assert (
+        attempt.reconciliation_status
+        == "pending"
+    )
+    assert (
+        attempt.reconciliation_next_attempt_at
+        is not None
+    )
+
+    final_commit = commit_snapshots[-1]
+
+    assert final_commit[0] == "ws_CO_TEST"
+    assert final_commit[1] == "pending"
+    assert final_commit[2] is not None

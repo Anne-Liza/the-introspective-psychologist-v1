@@ -219,3 +219,38 @@ def test_deferred_mpesa_verification_moves_request_to_review(
         in event.notes
     )
 
+
+
+def test_unverified_callback_keeps_attempt_processing():
+    attempt = SimpleNamespace(
+        id="attempt-unverified",
+        payment_request_id="payment-unverified",
+        status="processing",
+        verification_status="unverified",
+    )
+
+    event = SimpleNamespace(
+        is_duplicate=False,
+        verification_status="unverified",
+    )
+
+    payload = SimpleNamespace(
+        event_status="cancelled",
+    )
+
+    class DB:
+        def add(self, _obj):
+            pass
+
+    attempts.apply_event_to_attempt_and_request(
+        DB(),
+        attempt=attempt,
+        event=event,
+        payload=payload,
+    )
+
+    assert attempt.status == "processing"
+    assert (
+        attempt.verification_status
+        == "unverified"
+    )
