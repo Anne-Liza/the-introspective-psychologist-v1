@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 
 import { DataState } from "../../../components/data/DataState";
+import { Button } from "../../../components/ui/Button";
 import { useAuth } from "../../auth/context/AuthContext";
 import {
   fetchPublicServices,
@@ -83,6 +84,8 @@ export function AvailabilityPage() {
 
   const [editingRule, setEditingRule] =
     useState<AvailabilityRule | null>(null);
+  const [ruleEditorOpen, setRuleEditorOpen] =
+    useState(false);
 
   const {
     data: rules,
@@ -184,19 +187,44 @@ export function AvailabilityPage() {
   });
 
   async function saveRule(
-    payload: AvailabilityRulePayload,
+    payloads: AvailabilityRulePayload[],
   ) {
-    if (editingRule) {
-      await updateRuleMutation.mutateAsync({
-        id: editingRule.id,
-        data: payload,
-      });
-
-      setEditingRule(null);
+    if (!payloads.length) {
       return;
     }
 
-    await createRuleMutation.mutateAsync(payload);
+    if (editingRule) {
+      await updateRuleMutation.mutateAsync({
+        id: editingRule.id,
+        data: payloads[0],
+      });
+
+      setEditingRule(null);
+      setRuleEditorOpen(false);
+      return;
+    }
+
+    for (const payload of payloads) {
+      await createRuleMutation.mutateAsync(payload);
+    }
+
+    setRuleEditorOpen(false);
+  }
+
+  function beginCreatingRule() {
+    createRuleMutation.reset();
+    updateRuleMutation.reset();
+    setEditingRule(null);
+    setRuleEditorOpen(true);
+
+    window.setTimeout(() => {
+      document
+        .getElementById("availability-rule-form")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
   }
 
   function beginEditingRule(
@@ -205,6 +233,7 @@ export function AvailabilityPage() {
     createRuleMutation.reset();
     updateRuleMutation.reset();
     setEditingRule(rule);
+    setRuleEditorOpen(true);
 
     window.setTimeout(() => {
       document
@@ -253,6 +282,9 @@ export function AvailabilityPage() {
     [therapistProfiles],
   );
 
+  const showRuleEditor =
+    ruleEditorOpen || editingRule !== null;
+
   const savingRule =
     createRuleMutation.isPending
     || updateRuleMutation.isPending;
@@ -285,24 +317,35 @@ export function AvailabilityPage() {
       );
 
   return (
-    <div className="space-y-8">
-      <header>
-        <p className="text-sm font-medium text-slate-500">
-          {canManageTeam
-            ? "Practice scheduling"
-            : "Your working schedule"}
-        </p>
+    <div className="flex flex-col gap-8">
+      <header className="order-1 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            {canManageTeam
+              ? "Practice scheduling"
+              : "Your working schedule"}
+          </p>
 
-        <h2 className="text-3xl font-bold text-slate-950">
-          {heading}
-        </h2>
+          <h2 className="text-3xl font-bold text-slate-950">
+            {heading}
+          </h2>
 
-        <p className="mt-2 text-slate-600">
-          {description}
-        </p>
+          <p className="mt-2 text-slate-600">
+            {description}
+          </p>
+        </div>
+
+        {canCreate ? (
+          <Button
+            type="button"
+            onClick={beginCreatingRule}
+          >
+            + Add availability
+          </Button>
+        ) : null}
       </header>
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+      <div className="order-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
         {canManageTeam
           ? (
               "You are viewing practice-wide availability. "
@@ -315,7 +358,9 @@ export function AvailabilityPage() {
             )}
       </div>
 
-      {canCreate || editingRule ? (
+      {showRuleEditor
+      && (canCreate || editingRule) ? (
+        <div className="order-5">
         <AvailabilityRuleForm
           canManageTeam={canManageTeam}
           editingRule={editingRule}
@@ -328,20 +373,22 @@ export function AvailabilityPage() {
           onSubmit={saveRule}
           onCancelEdit={() => {
             setEditingRule(null);
+            setRuleEditorOpen(false);
             createRuleMutation.reset();
             updateRuleMutation.reset();
           }}
         />
+        </div>
       ) : null}
 
       {servicesLoading
       || (canManageTeam && therapistsLoading) ? (
-        <p className="text-sm text-slate-500">
+        <p className="order-3 text-sm text-slate-500">
           Loading service and therapist options...
         </p>
       ) : null}
 
-      <section>
+      <section className="order-4">
         <div className="mb-4">
           <h3 className="text-xl font-bold text-slate-950">
             Weekly schedule
@@ -415,6 +462,7 @@ export function AvailabilityPage() {
         ) : null}
       </section>
 
+      <div className="order-6">
       <AvailabilityExceptionManager
         canManageTeam={canManageTeam}
         canCreate={canCreate}
@@ -427,6 +475,7 @@ export function AvailabilityPage() {
         isError={exceptionsError}
         queryError={exceptionsQueryError}
       />
+      </div>
     </div>
   );
 }
