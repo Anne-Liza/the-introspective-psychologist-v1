@@ -47,6 +47,9 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
     items: [
       { label: "Contact Messages", href: "/dashboard/contact-messages", permission: "contact_messages.read" },
       { label: "Email Templates", href: "/dashboard/email-templates", permission: "email_templates.read" },
+      { label: "Email Logs",
+      href: "/dashboard/email-logs",
+      permission: "email_logs.read",},
     ],
   },
   {
