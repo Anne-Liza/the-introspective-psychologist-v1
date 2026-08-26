@@ -37,7 +37,7 @@ type Props = {
   saving: boolean;
   errorMessage?: string | null;
   onSubmit: (
-    payload: AvailabilityRulePayload,
+    payloads: AvailabilityRulePayload[],
   ) => Promise<void>;
   onCancelEdit: () => void;
 };
@@ -57,7 +57,8 @@ export function AvailabilityRuleForm({
   onCancelEdit,
 }: Props) {
   const [title, setTitle] = useState("");
-  const [dayOfWeek, setDayOfWeek] = useState(0);
+  const [selectedDays, setSelectedDays] =
+    useState<number[]>([0]);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("17:00");
   const [timezone, setTimezone] = useState(
@@ -71,9 +72,8 @@ export function AvailabilityRuleForm({
     therapistProfileId,
     setTherapistProfileId,
   ] = useState("");
-  const [sessionFormat, setSessionFormat] = useState(
-    "Online",
-  );
+  const [selectedFormats, setSelectedFormats] =
+    useState<string[]>(["Online"]);
   const [location, setLocation] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
@@ -82,7 +82,7 @@ export function AvailabilityRuleForm({
 
   function resetForm() {
     setTitle("");
-    setDayOfWeek(0);
+    setSelectedDays([0]);
     setStartTime("09:00");
     setEndTime("17:00");
     setTimezone("Africa/Nairobi");
@@ -91,7 +91,7 @@ export function AvailabilityRuleForm({
     setCapacity(1);
     setServiceId("");
     setTherapistProfileId("");
-    setSessionFormat("Online");
+    setSelectedFormats(["Online"]);
     setLocation("");
     setSortOrder(0);
     setIsActive(true);
@@ -105,7 +105,7 @@ export function AvailabilityRuleForm({
     }
 
     setTitle(editingRule.title);
-    setDayOfWeek(editingRule.day_of_week);
+    setSelectedDays([editingRule.day_of_week]);
     setStartTime(
       timeInputValue(editingRule.start_time),
     );
@@ -113,8 +113,14 @@ export function AvailabilityRuleForm({
       timeInputValue(editingRule.end_time),
     );
     setTimezone(editingRule.timezone);
+    const linkedService = services.find(
+      (service) =>
+        service.id === editingRule.service_id,
+    );
+
     setSlotDuration(
-      editingRule.slot_duration_minutes,
+      linkedService?.duration_minutes
+        ?? editingRule.slot_duration_minutes,
     );
     setBufferMinutes(editingRule.buffer_minutes);
     setCapacity(editingRule.capacity);
@@ -122,19 +128,61 @@ export function AvailabilityRuleForm({
     setTherapistProfileId(
       editingRule.therapist_profile_id ?? "",
     );
-    setSessionFormat(
-      editingRule.session_format ?? "",
-    );
+    setSelectedFormats([
+      editingRule.session_format || "Online",
+    ]);
     setLocation(editingRule.location ?? "");
     setSortOrder(editingRule.sort_order);
     setIsActive(editingRule.is_active);
     setIsPublic(editingRule.is_public);
     setLocalError("");
-  }, [editingRule]);
+  }, [editingRule, services]);
 
   function cancelEdit() {
     resetForm();
     onCancelEdit();
+  }
+
+  const selectedService = services.find(
+    (service) => service.id === serviceId,
+  );
+
+  function toggleDay(day: number) {
+    if (editingRule) {
+      setSelectedDays([day]);
+      return;
+    }
+
+    setSelectedDays((current) =>
+      current.includes(day)
+        ? current.filter((value) => value !== day)
+        : [...current, day].sort(),
+    );
+  }
+
+  function toggleFormat(format: string) {
+    if (editingRule) {
+      setSelectedFormats([format]);
+      return;
+    }
+
+    setSelectedFormats((current) =>
+      current.includes(format)
+        ? current.filter((value) => value !== format)
+        : [...current, format],
+    );
+  }
+
+  function handleServiceChange(nextId: string) {
+    setServiceId(nextId);
+
+    const service = services.find(
+      (item) => item.id === nextId,
+    );
+
+    if (service?.duration_minutes) {
+      setSlotDuration(service.duration_minutes);
+    }
   }
 
   async function handleSubmit(
@@ -145,6 +193,30 @@ export function AvailabilityRuleForm({
 
     if (!title.trim()) {
       setLocalError("Enter a schedule title.");
+      return;
+    }
+
+    if (!selectedDays.length) {
+      setLocalError(
+        "Choose at least one available day.",
+      );
+      return;
+    }
+
+    if (!selectedFormats.length) {
+      setLocalError(
+        "Choose at least one session format.",
+      );
+      return;
+    }
+
+    if (
+      selectedFormats.includes("In person")
+      && !location.trim()
+    ) {
+      setLocalError(
+        "Add a location for in-person sessions.",
+      );
       return;
     }
 
@@ -183,9 +255,8 @@ export function AvailabilityRuleForm({
       return;
     }
 
-    const payload: AvailabilityRulePayload = {
+    const common = {
       title: title.trim(),
-      day_of_week: dayOfWeek,
       start_time: startTime,
       end_time: endTime,
       timezone: timezone.trim(),
@@ -196,16 +267,26 @@ export function AvailabilityRuleForm({
       therapist_profile_id: canManageTeam
         ? therapistProfileId || null
         : null,
-      session_format:
-        sessionFormat.trim() || null,
-      location: location.trim() || null,
       is_active: isActive,
       is_public: isPublic,
       sort_order: sortOrder,
     };
 
+    const payloads: AvailabilityRulePayload[] =
+      selectedDays.flatMap((day) =>
+        selectedFormats.map((format) => ({
+          ...common,
+          day_of_week: day,
+          session_format: format,
+          location:
+            format === "In person"
+              ? location.trim()
+              : null,
+        })),
+      );
+
     try {
-      await onSubmit(payload);
+      await onSubmit(payloads);
       resetForm();
     } catch {
       // The parent mutation exposes the API error below.
@@ -257,28 +338,37 @@ export function AvailabilityRuleForm({
           required
         />
 
-        <label className="block min-w-0 space-y-2">
+        <div className="md:col-span-2">
           <span className="text-sm font-medium text-slate-700">
-            Day
+            Days available
           </span>
 
-          <select
-            value={dayOfWeek}
-            onChange={(event) =>
-              setDayOfWeek(Number(event.target.value))
-            }
-            className={selectClassName}
-          >
+          <div className="mt-2 flex flex-wrap gap-2">
             {DAY_OPTIONS.map((day) => (
-              <option
+              <label
                 key={day.value}
-                value={day.value}
+                className="flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700"
               >
+                <input
+                  type="checkbox"
+                  checked={selectedDays.includes(
+                    day.value,
+                  )}
+                  onChange={() =>
+                    toggleDay(day.value)
+                  }
+                />
                 {day.label}
-              </option>
+              </label>
             ))}
-          </select>
-        </label>
+          </div>
+
+          {editingRule ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Editing changes one existing schedule rule.
+            </p>
+          ) : null}
+        </div>
 
         <Input
           label="Start time"
@@ -302,19 +392,30 @@ export function AvailabilityRuleForm({
           required
         />
 
-        <Input
-          label="Session duration in minutes"
-          type="number"
-          min={1}
-          value={slotDuration}
-          onChange={(event) =>
-            setSlotDuration(
-              Number(event.target.value),
-            )
-          }
-          className="bg-white text-slate-950"
-          required
-        />
+        <div>
+          <Input
+            label="Session duration in minutes"
+            type="number"
+            min={1}
+            value={slotDuration}
+            onChange={(event) =>
+              setSlotDuration(
+                Number(event.target.value),
+              )
+            }
+            className="bg-white text-slate-950"
+            disabled={Boolean(
+              selectedService?.duration_minutes,
+            )}
+            required
+          />
+
+          {selectedService?.duration_minutes ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Inherited from the selected service.
+            </p>
+          ) : null}
+        </div>
 
         <Input
           label="Buffer between sessions"
@@ -330,25 +431,46 @@ export function AvailabilityRuleForm({
           required
         />
 
-        <Input
-          label="Session format"
-          value={sessionFormat}
-          onChange={(event) =>
-            setSessionFormat(event.target.value)
-          }
-          placeholder="Online or In-person"
-          className="bg-white text-slate-950"
-        />
+        <div>
+          <span className="text-sm font-medium text-slate-700">
+            Session formats
+          </span>
 
-        <Input
-          label="Location"
-          value={location}
-          onChange={(event) =>
-            setLocation(event.target.value)
-          }
-          placeholder="Secure video session"
-          className="bg-white text-slate-950"
-        />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {["Online", "In person"].map((format) => (
+              <label
+                key={format}
+                className="flex cursor-pointer items-center gap-2 rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedFormats.includes(
+                    format,
+                  )}
+                  onChange={() =>
+                    toggleFormat(format)
+                  }
+                />
+                {format}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {selectedFormats.includes("In person") ? (
+          <Input
+            label="In-person location"
+            value={location}
+            onChange={(event) =>
+              setLocation(event.target.value)
+            }
+            placeholder="Practice address or room"
+            className="bg-white text-slate-950"
+            required
+          />
+        ) : (
+          <div />
+        )}
 
         <label className="block min-w-0 space-y-2">
           <span className="text-sm font-medium text-slate-700">
@@ -358,7 +480,9 @@ export function AvailabilityRuleForm({
           <select
             value={serviceId}
             onChange={(event) =>
-              setServiceId(event.target.value)
+              handleServiceChange(
+                event.target.value,
+              )
             }
             className={selectClassName}
           >

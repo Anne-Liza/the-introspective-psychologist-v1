@@ -187,12 +187,16 @@ export function AvailabilityPage() {
   });
 
   async function saveRule(
-    payload: AvailabilityRulePayload,
+    payloads: AvailabilityRulePayload[],
   ) {
+    if (!payloads.length) {
+      return;
+    }
+
     if (editingRule) {
       await updateRuleMutation.mutateAsync({
         id: editingRule.id,
-        data: payload,
+        data: payloads[0],
       });
 
       setEditingRule(null);
@@ -200,7 +204,10 @@ export function AvailabilityPage() {
       return;
     }
 
-    await createRuleMutation.mutateAsync(payload);
+    for (const payload of payloads) {
+      await createRuleMutation.mutateAsync(payload);
+    }
+
     setRuleEditorOpen(false);
   }
 
