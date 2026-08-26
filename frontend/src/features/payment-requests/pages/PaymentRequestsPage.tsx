@@ -3,6 +3,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
+import { Link } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
 import { Button } from "../../../components/ui/Button";
@@ -31,6 +32,34 @@ const NEXT_ACTIONS: Array<{
     status: "cancelled",
   },
 ];
+
+function friendlyLabel(value: string) {
+  return value
+    .split("_")
+    .join(" ")
+    .replace(/\b\w/g, (letter) =>
+      letter.toUpperCase(),
+    );
+}
+
+function transactionDisplay(
+  request: PaymentRequest,
+) {
+  if (request.provider_transaction_reference) {
+    return request.provider_transaction_reference;
+  }
+
+  if (
+    ["created", "processing"].includes(
+      request.status,
+    )
+  ) {
+    return "Pending";
+  }
+
+  return "—";
+}
+
 
 export function PaymentRequestsPage() {
   const queryClient = useQueryClient();
@@ -150,14 +179,15 @@ export function PaymentRequestsPage() {
                       </div>
                       <div className="text-slate-500">
                         Transaction:{" "}
-                        {request.provider_transaction_reference ||
-                          "Pending"}
+                        {transactionDisplay(request)}
                       </div>
                     </td>
 
                     <td className="p-4">
                       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                        {request.status}
+                        {friendlyLabel(
+                          request.status,
+                        )}
                       </span>
                     </td>
 
@@ -182,36 +212,65 @@ export function PaymentRequestsPage() {
                     </td>
 
                     <td className="p-4">
-                      <div className="flex flex-wrap gap-2">
-                        {NEXT_ACTIONS.map(
-                          (action) => (
-                            <Button
-                              type="button"
-                              key={action.status}
-                              onClick={() =>
-                                updateMutation.mutate(
-                                  {
-                                    id: request.id,
-                                    data: {
-                                      status:
-                                        action.status,
-                                      event_notes:
-                                        `Marked ${action.status} from admin dashboard.`,
-                                    },
-                                  },
-                                )
-                              }
-                              disabled={
-                                updateMutation.isPending ||
-                                request.status ===
-                                  action.status
-                              }
+                      {request.provider === "mpesa" ? (
+                        <div className="space-y-3">
+                          <p className="max-w-[16rem] text-xs leading-5 text-slate-500">
+                            M-Pesa payment state is managed
+                            automatically through provider
+                            verification and reconciliation.
+                          </p>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              to="/dashboard/payment-attempts"
+                              className="rounded-lg border px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                             >
-                              {action.label}
-                            </Button>
-                          ),
-                        )}
-                      </div>
+                              Payment attempts
+                            </Link>
+
+                            {request.target_type ===
+                            "commerce_order" ? (
+                              <Link
+                                to="/dashboard/orders"
+                                className="rounded-lg border px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                              >
+                                Store orders
+                              </Link>
+                            ) : null}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {NEXT_ACTIONS.map(
+                            (action) => (
+                              <Button
+                                type="button"
+                                key={action.status}
+                                onClick={() =>
+                                  updateMutation.mutate(
+                                    {
+                                      id: request.id,
+                                      data: {
+                                        status:
+                                          action.status,
+                                        event_notes:
+                                          `Marked ${action.status} from admin dashboard.`,
+                                      },
+                                    },
+                                  )
+                                }
+                                disabled={
+                                  updateMutation.isPending ||
+                                  request.status ===
+                                    action.status
+                                }
+                              >
+                                {action.label}
+                              </Button>
+                            ),
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ),

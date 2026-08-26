@@ -30,14 +30,15 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
     items: [
       { label: "Payment Requests", href: "/dashboard/payment-requests", permission: "payment_requests.read" },
       { label: "Payment Attempts", href: "/dashboard/payment-attempts", permission: "payment_attempts.read" },
-      { label: "M-Pesa Payments", href: "/dashboard/mpesa-payments", permission: "mpesa_payments.read" },
+      { label: "M-Pesa Operations", href: "/dashboard/mpesa-payments", permission: "mpesa_payments.read" },
       { label: "Receipts", href: "/dashboard/receipts", permission: "receipts.read" },
     ],
   },
   {
     title: "Store",
     items: [
-      { label: "Commerce", href: "/dashboard/commerce", permission: "commerce_core.read" },
+      { label: "Products", href: "/dashboard/products", permission: "commerce_core.read" },
+      { label: "Orders", href: "/dashboard/orders", permission: "commerce_core.read" },
       { label: "Fulfillment", href: "/dashboard/fulfillment", permission: "fulfillment.read" },
     ],
   },
