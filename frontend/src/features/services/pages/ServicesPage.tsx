@@ -96,13 +96,15 @@ export function ServicesPage() {
     confirmationModeOverride,
     setConfirmationModeOverride,
   ] = useState<ServiceConfirmationMode | "">("");
-  const [ctaLabel, setCtaLabel] = useState("Get started");
-  const [ctaUrl, setCtaUrl] = useState("/contact");
+  const [ctaLabel, setCtaLabel] = useState("Book this service");
+  const [ctaUrl, setCtaUrl] = useState("/book");
   const [sortOrder, setSortOrder] = useState(0);
   const [isFeatured, setIsFeatured] = useState(false);
   const [isPublished, setIsPublished] = useState(true);
   const [formError, setFormError] =
     useState<string | null>(null);
+  const [editorOpen, setEditorOpen] =
+    useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["services"],
@@ -123,12 +125,13 @@ export function ServicesPage() {
     setPaymentPolicyOverride("");
     setDepositPercentageOverride("");
     setConfirmationModeOverride("");
-    setCtaLabel("Get started");
-    setCtaUrl("/contact");
+    setCtaLabel("Book this service");
+    setCtaUrl("/book");
     setSortOrder(0);
     setIsFeatured(false);
     setIsPublished(true);
     setFormError(null);
+    setEditorOpen(false);
   }
 
   function editService(service: Service) {
@@ -151,13 +154,22 @@ export function ServicesPage() {
     setConfirmationModeOverride(
       service.confirmation_mode_override ?? "",
     );
-    setCtaLabel(service.cta_label ?? "Get started");
-    setCtaUrl(service.cta_url ?? "/contact");
+    setCtaLabel(service.cta_label ?? "Book this service");
+    setCtaUrl(service.cta_url ?? "/book");
     setSortOrder(service.sort_order ?? 0);
     setIsFeatured(service.is_featured);
     setIsPublished(service.is_published);
     setFormError(null);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setEditorOpen(true);
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  }
+
+  function startCreateService() {
+    resetForm();
+    setEditorOpen(true);
   }
 
   const createMutation = useMutation({
@@ -271,23 +283,42 @@ export function ServicesPage() {
     createMutation.isPending ||
     updateMutation.isPending;
   const showEditor =
-    canCreate ||
-    (editingId !== null && canUpdate);
+    editorOpen &&
+    (
+      (editingId === null && canCreate) ||
+      (editingId !== null && canUpdate)
+    );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium text-slate-500">Reusable catalog</p>
-        <h2 className="text-3xl font-bold">Services</h2>
-        <p className="mt-2 text-slate-600">
-          Manage public services, packages, formats, durations, pricing labels, and publishing state.
-        </p>
+    <div className="flex flex-col gap-6">
+      <div className="order-1 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            Reusable catalog
+          </p>
+          <h2 className="text-3xl font-bold">
+            Services
+          </h2>
+          <p className="mt-2 text-slate-600">
+            Manage public services, formats, durations,
+            pricing, booking rules and publishing state.
+          </p>
+        </div>
+
+        {canCreate ? (
+          <Button
+            type="button"
+            onClick={startCreateService}
+          >
+            + Add service
+          </Button>
+        ) : null}
       </div>
 
       {showEditor ? (
         <form
           onSubmit={handleSubmit}
-          className="rounded-2xl border bg-white p-6 shadow-sm"
+          className="order-3 rounded-2xl border bg-white p-6 shadow-sm"
         >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -479,7 +510,7 @@ export function ServicesPage() {
         ) : null}
         </form>
       ) : (
-        <section className="rounded-2xl border bg-white p-5 text-sm text-slate-600 shadow-sm">
+        <section className="order-3 rounded-2xl border bg-white p-5 text-sm text-slate-600 shadow-sm">
           {canUpdate ? (
             <>
               Select <strong>Edit</strong> on a service
@@ -496,6 +527,7 @@ export function ServicesPage() {
         </section>
       )}
 
+      <div className="order-2">
       {showState ? (
         <DataState isLoading={isLoading} isError={isError} empty={!data?.length} />
       ) : (
@@ -605,6 +637,7 @@ export function ServicesPage() {
           </table>
         </div>
       )}
+      </div>
     </div>
   );
 }
