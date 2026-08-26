@@ -122,6 +122,16 @@ def load_commerce_order(db: Session, commerce_order_id: str) -> CommerceOrder:
     return order
 
 
+def assert_order_paid_for_fulfillment(
+    order: CommerceOrder,
+) -> None:
+    if order.status != "paid":
+        raise ValueError(
+            "Commerce order must be paid before "
+            "fulfillment can begin."
+        )
+
+
 def sync_order_fulfillment_status(
     db: Session,
     *,
@@ -152,10 +162,21 @@ def create_fulfillment_from_receipt(
     if existing_for_receipt is not None:
         return attach_events(existing_for_receipt, get_fulfillment_events(db, existing_for_receipt.id))
 
-    receipt = load_issued_receipt(db, payload.receipt_id)
-    order = load_commerce_order(db, receipt.commerce_order_id)
+    receipt = load_issued_receipt(
+        db,
+        payload.receipt_id,
+    )
+    order = load_commerce_order(
+        db,
+        receipt.commerce_order_id,
+    )
 
-    existing_for_order = get_existing_fulfillment_for_order(db, receipt.commerce_order_id)
+    assert_order_paid_for_fulfillment(order)
+
+    existing_for_order = get_existing_fulfillment_for_order(
+        db,
+        receipt.commerce_order_id,
+    )
     if existing_for_order is not None:
         raise ValueError("A fulfillment record already exists for this commerce order.")
 
@@ -220,7 +241,22 @@ def update_fulfillment_from_payload(
         record.fulfillment_type = update_data["fulfillment_type"]
 
     if next_status is not None and next_status != previous_status:
-        assert_status_transition_allowed(previous_status, next_status)
+        assert_status_transition_allowed(
+            previous_status,
+            next_status,
+        )
+
+        if next_status in {
+            "in_progress",
+            "fulfilled",
+        }:
+            order = load_commerce_order(
+                db,
+                record.commerce_order_id,
+            )
+            assert_order_paid_for_fulfillment(
+                order
+            )
 
         record.status = next_status
 
