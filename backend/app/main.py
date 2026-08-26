@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +16,15 @@ from app.workers.mpesa_reconciliation import (
     mpesa_reconciliation_loop,
 )
 
+
+if settings.SENTRY_DSN.strip():
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.APP_ENV,
+        release=settings.APP_VERSION,
+        send_default_pii=False,
+        traces_sample_rate=0.0,
+    )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
