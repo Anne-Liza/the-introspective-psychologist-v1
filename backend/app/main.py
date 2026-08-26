@@ -25,10 +25,13 @@ if settings.SENTRY_DSN.strip():
         send_default_pii=False,
         traces_sample_rate=0.0,
     )
-    sentry_sdk.capture_message(
+    event_id = sentry_sdk.capture_message(
         "Production Sentry verification",
         level="error",
     )
+    sentry_sdk.flush(timeout=5)
+
+    print(f"Sentry verification event sent: {event_id}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
