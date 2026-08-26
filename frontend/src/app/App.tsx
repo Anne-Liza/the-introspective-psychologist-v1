@@ -37,6 +37,7 @@ import { ClientRecordsPage } from "../features/client-records/pages/ClientRecord
 import { CommerceCorePage } from "../features/commerce-core/pages/CommerceCorePage";
 import { ContactMessagesPage } from "../features/contact-messages/pages/ContactMessagesPage";
 import { EmailTemplatesPage } from "../features/email-templates/pages/EmailTemplatesPage";
+import { EmailLogsPage } from "../features/email/pages/EmailLogsPage";
 import { FilesPage } from "../features/files/pages/FilesPage";
 import { FulfillmentPage } from "../features/fulfillment/pages/FulfillmentPage";
 import { TeamPage } from "../features/invitations/pages/TeamPage";
@@ -104,6 +105,14 @@ export function App() {
         <Route path="orders" element={<PermissionRoute permission="commerce_core.read"><CommerceCorePage view="orders" /></PermissionRoute>} />
         <Route path="contact-messages" element={<PermissionRoute permission="contact_messages.read"><ContactMessagesPage /></PermissionRoute>} />
         <Route path="email-templates" element={<PermissionRoute permission="email_templates.read"><EmailTemplatesPage /></PermissionRoute>} />
+        <Route
+          path="email-logs"
+          element={
+            <PermissionRoute permission="email_logs.read">
+              <EmailLogsPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="files" element={<PermissionRoute permission="files.read"><FilesPage /></PermissionRoute>} />
         <Route path="fulfillment" element={<PermissionRoute permission="fulfillment.read"><FulfillmentPage /></PermissionRoute>} />
         <Route path="team" element={<PermissionRoute permission="users.read"><TeamPage /></PermissionRoute>} />
