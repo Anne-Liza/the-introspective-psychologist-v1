@@ -37,6 +37,15 @@ export type PaymentAttempt = {
   currency: string;
   status: string;
   verification_status: string;
+
+  reconciliation_status: string;
+  reconciliation_retry_count: number;
+  reconciliation_last_attempt_at: string | null;
+  reconciliation_next_attempt_at: string | null;
+  reconciliation_completed_at: string | null;
+  reconciliation_last_error_code: string | null;
+  reconciliation_last_error_message: string | null;
+
   checkout_url: string | null;
   error_code: string | null;
   error_message: string | null;
