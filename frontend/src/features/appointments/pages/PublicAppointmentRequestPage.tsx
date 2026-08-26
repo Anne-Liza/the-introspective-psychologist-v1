@@ -1,4 +1,10 @@
-import { FormEvent, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { useSearchParams } from "react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 
@@ -78,6 +84,10 @@ function bookingErrorMessage(error: unknown, fallback: string) {
 }
 
 export function PublicAppointmentRequestPage() {
+  const [searchParams] = useSearchParams();
+  const requestedServiceSlug =
+    searchParams.get("service");
+
   const [serviceId, setServiceId] = useState("");
   const [sessionFormat, setSessionFormat] = useState("");
   const [location, setLocation] = useState("");
@@ -104,6 +114,63 @@ export function PublicAppointmentRequestPage() {
   const selectedService = servicesQuery.data?.find(
     (service) => service.id === serviceId,
   );
+
+  const effectivePaymentPolicy =
+    selectedService?.payment_policy_override ??
+    configQuery.data?.payment_policy;
+
+  useEffect(() => {
+    if (
+      !requestedServiceSlug ||
+      !servicesQuery.data?.length
+    ) {
+      return;
+    }
+
+    const requestedService =
+      servicesQuery.data.find(
+        (service) =>
+          service.slug === requestedServiceSlug,
+      );
+
+    if (!requestedService) {
+      return;
+    }
+
+    if (serviceId !== requestedService.id) {
+      setServiceId(requestedService.id);
+    }
+
+    if (sessionFormat) {
+      return;
+    }
+
+    const formats =
+      configQuery.data?.session_formats ?? [];
+
+    const matchingFormats =
+      requestedService.service_format
+        ? formats.filter((format) =>
+            normalize(
+              requestedService.service_format,
+            ).includes(
+              normalize(format.key),
+            ),
+          )
+        : formats;
+
+    if (matchingFormats.length === 1) {
+      setSessionFormat(
+        matchingFormats[0].key,
+      );
+    }
+  }, [
+    requestedServiceSlug,
+    serviceId,
+    sessionFormat,
+    servicesQuery.data,
+    configQuery.data?.session_formats,
+  ]);
 
   const availableFormats = useMemo(() => {
     const formats = configQuery.data?.session_formats ?? [];
@@ -203,7 +270,7 @@ export function PublicAppointmentRequestPage() {
       }
 
       const paymentPolicy =
-        configQuery.data?.payment_policy;
+        effectivePaymentPolicy;
 
       if (!paymentPolicy) {
         throw new Error(
@@ -308,8 +375,8 @@ export function PublicAppointmentRequestPage() {
   }
 
   const requiresAdvancePayment =
-    configQuery.data?.payment_policy === "deposit" ||
-    configQuery.data?.payment_policy ===
+    effectivePaymentPolicy === "deposit" ||
+    effectivePaymentPolicy ===
       "full_upfront";
 
   const appointmentConfirmation =

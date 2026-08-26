@@ -15,6 +15,25 @@ function formatPrice(service: Service) {
   return `${service.currency || "KES"} ${amount.toLocaleString()}`;
 }
 
+function serviceCtaUrl(service: Service) {
+  const configured = service.cta_url;
+
+  if (!configured) {
+    return null;
+  }
+
+  if (
+    configured === "/book" ||
+    configured === "/book/"
+  ) {
+    return `/book?service=${encodeURIComponent(
+      service.slug,
+    )}`;
+  }
+
+  return configured;
+}
+
 function DetailRow({ label, value }: { label: string; value: string | number | null }) {
   if (value === null || value === undefined || value === "") return null;
 
@@ -79,12 +98,21 @@ export function PublicServiceDetailPage() {
               ) : null}
 
               <div className="mt-10 flex flex-wrap gap-4">
-                {data.cta_url ? (
-                  <a
-                    href={data.cta_url}
+                {serviceCtaUrl(data)?.startsWith("/") ? (
+                  <Link
+                    to={serviceCtaUrl(data) ?? "/book"}
                     className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white"
                   >
-                    {data.cta_label || "Get started"}
+                    {data.cta_label ||
+                      "Book this service"}
+                  </Link>
+                ) : serviceCtaUrl(data) ? (
+                  <a
+                    href={serviceCtaUrl(data) ?? undefined}
+                    className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white"
+                  >
+                    {data.cta_label ||
+                      "Book this service"}
                   </a>
                 ) : null}
 
