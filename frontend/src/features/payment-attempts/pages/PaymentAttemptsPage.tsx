@@ -16,6 +16,88 @@ function friendlyLabel(value: string) {
     );
 }
 
+function formatTimestamp(
+  value: string | null,
+) {
+  if (!value) {
+    return "—";
+  }
+
+  return new Date(value).toLocaleString();
+}
+
+function ReconciliationSummary({
+  attempt,
+}: {
+  attempt: PaymentAttempt;
+}) {
+  const active = ["pending", "retrying"].includes(
+    attempt.reconciliation_status,
+  );
+
+  return (
+    <div className="min-w-[15rem] space-y-2">
+      <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+        {friendlyLabel(
+          attempt.reconciliation_status,
+        )}
+      </span>
+
+      <div className="text-xs leading-5 text-slate-500">
+        <div>
+          Retries:{" "}
+          {attempt.reconciliation_retry_count}
+        </div>
+
+        <div>
+          Last check:{" "}
+          {formatTimestamp(
+            attempt.reconciliation_last_attempt_at,
+          )}
+        </div>
+
+        {active ? (
+          <div>
+            Next check:{" "}
+            {formatTimestamp(
+              attempt.reconciliation_next_attempt_at,
+            )}
+          </div>
+        ) : null}
+
+        {attempt.reconciliation_completed_at ? (
+          <div>
+            Completed:{" "}
+            {formatTimestamp(
+              attempt.reconciliation_completed_at,
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {attempt.reconciliation_last_error_code ? (
+        <details className="text-xs text-slate-600">
+          <summary className="cursor-pointer font-medium">
+            Reconciliation details
+          </summary>
+
+          <div className="mt-2 space-y-1 rounded-lg bg-slate-50 p-2">
+            <div>
+              Code:{" "}
+              {attempt.reconciliation_last_error_code}
+            </div>
+            <div>
+              {attempt.reconciliation_last_error_message ||
+                "No additional detail recorded."}
+            </div>
+          </div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+
 function AttemptReview({
   attempt,
 }: {
@@ -173,7 +255,7 @@ export function PaymentAttemptsPage() {
         />
       ) : (
         <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
-          <table className="min-w-[1080px] w-full text-left text-sm">
+          <table className="min-w-[1320px] w-full text-left text-sm">
             <thead className="bg-slate-50 text-slate-600">
               <tr>
                 <th className="p-4">Attempt</th>
@@ -185,6 +267,9 @@ export function PaymentAttemptsPage() {
                 <th className="p-4">Status</th>
                 <th className="p-4">
                   Verification
+                </th>
+                <th className="p-4">
+                  Reconciliation
                 </th>
                 <th className="p-4">
                   Recent events
@@ -229,7 +314,14 @@ export function PaymentAttemptsPage() {
                       <div className="text-slate-500">
                         Transaction:{" "}
                         {attempt.provider_transaction_reference ||
-                          "Pending"}
+                          ([
+                            "created",
+                            "submitting",
+                            "processing",
+                            "needs_review",
+                          ].includes(attempt.status)
+                            ? "Pending"
+                            : "—")}
                       </div>
                     </td>
 
@@ -250,6 +342,12 @@ export function PaymentAttemptsPage() {
                           attempt.verification_status,
                         )}
                       </span>
+                    </td>
+
+                    <td className="p-4">
+                      <ReconciliationSummary
+                        attempt={attempt}
+                      />
                     </td>
 
                     <td className="p-4">
