@@ -52,6 +52,8 @@ const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard/therapist-profiles": UserRoundCog,
   "/dashboard/team": ShieldCheck,
   "/dashboard/commerce": ShoppingBag,
+  "/dashboard/products": ShoppingBag,
+  "/dashboard/orders": PackageCheck,
   "/dashboard/payment-requests": WalletCards,
   "/dashboard/payment-attempts": PanelsTopLeft,
   "/dashboard/mpesa-payments": Smartphone,

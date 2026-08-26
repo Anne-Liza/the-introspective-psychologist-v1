@@ -1,19 +1,22 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
 import { Button } from "../../../components/ui/Button";
 import {
   createCommerceItem,
   deleteCommerceItem,
-  deleteCommerceOrder,
   fetchCommerceItems,
   fetchCommerceOrders,
   updateCommerceItem,
-  updateCommerceOrder,
 } from "../lib/commerceCoreApi";
 
-export function CommerceCorePage() {
+export function CommerceCorePage({
+  view = "products",
+}: {
+  view?: "products" | "orders";
+}) {
   const queryClient = useQueryClient();
 
   const [showProductForm, setShowProductForm] = useState(false);
@@ -29,11 +32,13 @@ export function CommerceCorePage() {
   const itemsQuery = useQuery({
     queryKey: ["commerce-items"],
     queryFn: fetchCommerceItems,
+    enabled: view === "products",
   });
 
   const ordersQuery = useQuery({
     queryKey: ["commerce-orders"],
     queryFn: fetchCommerceOrders,
+    enabled: view === "orders",
   });
 
   const createProductMutation = useMutation({
@@ -74,33 +79,26 @@ export function CommerceCorePage() {
     },
   });
 
-  const updateOrderMutation = useMutation({
-    mutationFn: updateCommerceOrder,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["commerce-orders"] });
-    },
-  });
-
-  const deleteOrderMutation = useMutation({
-    mutationFn: deleteCommerceOrder,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["commerce-orders"] });
-    },
-  });
-
   const itemState = itemsQuery.isLoading || itemsQuery.isError || !itemsQuery.data?.length;
   const orderState = ordersQuery.isLoading || ordersQuery.isError || !ordersQuery.data?.length;
 
   return (
     <div className="space-y-10">
       <div>
-        <p className="text-sm font-medium text-slate-500">Store management</p>
-        <h2 className="text-3xl font-bold">Products and Orders</h2>
+        <p className="text-sm font-medium text-slate-500">
+          Store management
+        </p>
+        <h2 className="text-3xl font-bold">
+          {view === "products" ? "Products" : "Orders"}
+        </h2>
         <p className="mt-2 text-slate-600">
-          Manage products, session packages, resources, orders, pricing, and publishing status.
+          {view === "products"
+            ? "Manage the products, resources, packages, pricing and publishing shown in your store."
+            : "Review customer orders, payment state, fulfillment state and purchased items."}
         </p>
       </div>
 
+      {view === "products" ? (
       <section className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -338,7 +336,9 @@ export function CommerceCorePage() {
           </div>
         )}
       </section>
+      ) : null}
 
+      {view === "orders" ? (
       <section className="space-y-4">
         <div>
           <h3 className="text-xl font-semibold">Orders</h3>
@@ -357,9 +357,10 @@ export function CommerceCorePage() {
                   <th className="p-4">Order</th>
                   <th className="p-4">Customer</th>
                   <th className="p-4">Total</th>
-                  <th className="p-4">Status</th>
+                  <th className="p-4">Payment</th>
+                  <th className="p-4">Fulfillment</th>
                   <th className="p-4">Items</th>
-                  <th className="p-4">Actions</th>
+                  <th className="p-4">Related records</th>
                 </tr>
               </thead>
               <tbody>
@@ -377,8 +378,16 @@ export function CommerceCorePage() {
                       {order.currency} {order.total_amount}
                     </td>
                     <td className="p-4">
-                      <div>{order.status}</div>
-                      <div className="text-slate-500">{order.fulfillment_status}</div>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {order.status.split("_").join(" ")}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                        {order.fulfillment_status
+                          .split("_")
+                          .join(" ")}
+                      </span>
                     </td>
                     <td className="p-4">
                       {order.items.map((item) => (
@@ -388,44 +397,22 @@ export function CommerceCorePage() {
                       ))}
                     </td>
                     <td className="p-4">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            updateOrderMutation.mutate({
-                              id: order.id,
-                              data: { status: "paid" },
-                            })
-                          }
-                          disabled={updateOrderMutation.isPending || order.status === "paid"}
+                      <div className="flex flex-col items-start gap-2">
+                        <Link
+                          to="/dashboard/payment-requests"
+                          className="text-sm font-semibold text-slate-700 underline-offset-4 hover:underline"
                         >
-                          Mark paid
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() =>
-                            updateOrderMutation.mutate({
-                              id: order.id,
-                              data: { fulfillment_status: "fulfilled" },
-                            })
-                          }
-                          disabled={
-                            updateOrderMutation.isPending ||
-                            order.status !== "paid" ||
-                            order.fulfillment_status === "fulfilled"
-                          }
+                          Payment records
+                        </Link>
+                        <Link
+                          to="/dashboard/fulfillment"
+                          className="text-sm font-semibold text-slate-700 underline-offset-4 hover:underline"
                         >
-                          Fulfilled
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={() => deleteOrderMutation.mutate(order.id)}
-                          disabled={deleteOrderMutation.isPending}
-                        >
-                          Delete
-                        </Button>
+                          Fulfillment
+                        </Link>
                       </div>
                     </td>
+
                   </tr>
                 ))}
               </tbody>
@@ -433,6 +420,7 @@ export function CommerceCorePage() {
           </div>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

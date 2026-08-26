@@ -1,4 +1,5 @@
 import { apiClient } from "../../../lib/api-client";
+import type { PaymentAttempt } from "../../payment-attempts/lib/paymentAttemptsApi";
 
 export type PublicMpesaStkPushResponse = {
   payment_attempt_id: string;
@@ -30,5 +31,13 @@ export async function initiatePublicMpesaStkPush(
         phone_number: payload.phone_number,
       },
     )
+  ).data;
+}
+
+export async function fetchMpesaAttempts(): Promise<
+  PaymentAttempt[]
+> {
+  return (
+    await apiClient.get("/mpesa-payments/attempts")
   ).data;
 }

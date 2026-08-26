@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit_events import AuditAction, record_audit_event
@@ -32,9 +33,41 @@ from app.modules.mpesa_payments.service import (
 from app.modules.payment_attempts.models import (
     PaymentAttempt,
 )
+from app.modules.payment_attempts.schemas import (
+    PaymentAttemptRead,
+)
+from app.modules.payment_attempts.service import (
+    attach_provider_events,
+    get_attempt_events,
+)
 from app.modules.users.models import User
 
 router = APIRouter()
+
+
+@router.get(
+    "/attempts",
+    response_model=list[PaymentAttemptRead],
+)
+def list_mpesa_attempts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("mpesa_payments.read")
+    ),
+):
+    attempts = db.scalars(
+        select(PaymentAttempt)
+        .where(PaymentAttempt.provider == "mpesa")
+        .order_by(PaymentAttempt.created_at.desc())
+    ).all()
+
+    return [
+        attach_provider_events(
+            attempt,
+            get_attempt_events(db, attempt.id),
+        )
+        for attempt in attempts
+    ]
 
 
 @router.post("/stk-push/prepare", response_model=MpesaStkPushPrepareResponse, status_code=status.HTTP_201_CREATED)

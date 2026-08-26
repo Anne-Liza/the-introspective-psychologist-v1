@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
 import { Button } from "../../../components/ui/Button";
@@ -16,6 +17,29 @@ const STATUS_ACTIONS: Array<{ label: string; status: FulfillmentRecord["status"]
   { label: "Fulfilled", status: "fulfilled" },
   { label: "Cancel", status: "cancelled" },
 ];
+
+function statusActionAllowed(
+  current: FulfillmentRecord["status"],
+  next: FulfillmentRecord["status"],
+) {
+  if (current === "pending") {
+    return [
+      "in_progress",
+      "fulfilled",
+      "cancelled",
+    ].includes(next);
+  }
+
+  if (current === "in_progress") {
+    return [
+      "fulfilled",
+      "cancelled",
+    ].includes(next);
+  }
+
+  return false;
+}
+
 
 function StatusBadge({ status }: { status: FulfillmentRecord["status"] }) {
   return (
@@ -149,8 +173,20 @@ export function FulfillmentPage() {
                 <tr className="border-t align-top" key={record.id}>
                   <td className="p-4">
                     <div className="font-medium">{record.fulfillment_number}</div>
-                    <div className="text-slate-500">Receipt: {record.receipt_id}</div>
-                    <div className="text-slate-500">Order: {record.order_number}</div>
+                    <div className="mt-1 flex flex-col items-start gap-1 text-slate-500">
+                      <Link
+                        to="/dashboard/receipts"
+                        className="underline-offset-4 hover:underline"
+                      >
+                        Receipt: {record.receipt_id}
+                      </Link>
+                      <Link
+                        to="/dashboard/orders"
+                        className="underline-offset-4 hover:underline"
+                      >
+                        Order: {record.order_number}
+                      </Link>
+                    </div>
                   </td>
                   <td className="p-4">
                     <div>{record.customer_name}</div>
@@ -180,7 +216,13 @@ export function FulfillmentPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex flex-wrap gap-2">
-                      {STATUS_ACTIONS.map((action) => (
+                      {STATUS_ACTIONS.filter(
+                        (action) =>
+                          statusActionAllowed(
+                            record.status,
+                            action.status,
+                          ),
+                      ).map((action) => (
                         <Button
                           type="button"
                           key={action.status}

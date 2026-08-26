@@ -99,7 +99,9 @@ export function App() {
         <Route path="booking-holds" element={<PermissionRoute permission="booking_engine.read"><BookingHoldsPage /></PermissionRoute>} />
         <Route path="booking-settings" element={<PermissionRoute permission="booking_engine.read"><BookingSettingsPage /></PermissionRoute>} />
         <Route path="client-records" element={<PermissionRoute permission="client_records.read"><ClientRecordsPage /></PermissionRoute>} />
-        <Route path="commerce" element={<PermissionRoute permission="commerce_core.read"><CommerceCorePage /></PermissionRoute>} />
+        <Route path="commerce" element={<PermissionRoute permission="commerce_core.read"><CommerceCorePage view="products" /></PermissionRoute>} />
+        <Route path="products" element={<PermissionRoute permission="commerce_core.read"><CommerceCorePage view="products" /></PermissionRoute>} />
+        <Route path="orders" element={<PermissionRoute permission="commerce_core.read"><CommerceCorePage view="orders" /></PermissionRoute>} />
         <Route path="contact-messages" element={<PermissionRoute permission="contact_messages.read"><ContactMessagesPage /></PermissionRoute>} />
         <Route path="email-templates" element={<PermissionRoute permission="email_templates.read"><EmailTemplatesPage /></PermissionRoute>} />
         <Route path="files" element={<PermissionRoute permission="files.read"><FilesPage /></PermissionRoute>} />
