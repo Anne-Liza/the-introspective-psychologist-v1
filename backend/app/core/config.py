@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = False
     EMAIL_FROM: str = "noreply@example.com"
+    BREVO_API_KEY: str = ""
 
     STORAGE_PROVIDER: str = "local"
     LOCAL_UPLOAD_DIR: str = "./uploads"
@@ -198,6 +199,13 @@ class Settings(BaseSettings):
 
         if "localhost" in self.FRONTEND_BASE_URL or "127.0.0.1" in self.FRONTEND_BASE_URL:
             errors.append("FRONTEND_BASE_URL cannot use localhost in production.")
+
+        email_provider = self.EMAIL_PROVIDER.strip().lower()
+
+        if email_provider == "brevo" and not self.BREVO_API_KEY:
+            errors.append(
+                "BREVO_API_KEY must be set when EMAIL_PROVIDER=brevo."
+            )
 
         if errors:
             message = "Production security validation failed:\n- " + "\n- ".join(errors)
