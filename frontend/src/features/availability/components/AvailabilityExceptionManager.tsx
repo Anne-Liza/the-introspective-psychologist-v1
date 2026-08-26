@@ -98,6 +98,10 @@ export function AvailabilityExceptionManager({
     editingException,
     setEditingException,
   ] = useState<AvailabilityException | null>(null);
+  const [
+    exceptionEditorOpen,
+    setExceptionEditorOpen,
+  ] = useState(false);
 
   const [exceptionDate, setExceptionDate] =
     useState("");
@@ -131,6 +135,7 @@ export function AvailabilityExceptionManager({
     setIsActive(true);
     setIsPublic(true);
     setLocalError("");
+    setExceptionEditorOpen(false);
   }
 
   useEffect(() => {
@@ -288,12 +293,29 @@ export function AvailabilityExceptionManager({
     }
   }
 
+  function beginCreateException() {
+    resetForm();
+    setExceptionEditorOpen(true);
+
+    window.setTimeout(() => {
+      document
+        .getElementById(
+          "availability-exception-form",
+        )
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 0);
+  }
+
   function beginEdit(
     exception: AvailabilityException,
   ) {
     createMutation.reset();
     updateMutation.reset();
     setEditingException(exception);
+    setExceptionEditorOpen(true);
 
     window.setTimeout(() => {
       document
@@ -349,6 +371,10 @@ export function AvailabilityExceptionManager({
     [therapistProfiles],
   );
 
+  const showEditor =
+    exceptionEditorOpen
+    || editingException !== null;
+
   const saving =
     createMutation.isPending
     || updateMutation.isPending;
@@ -367,12 +393,13 @@ export function AvailabilityExceptionManager({
         : null;
 
   return (
-    <section className="space-y-5">
-      {canCreate || editingException ? (
+    <section className="flex flex-col gap-5">
+      {showEditor
+      && (canCreate || editingException) ? (
         <form
           id="availability-exception-form"
           onSubmit={handleSubmit}
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="order-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -393,15 +420,15 @@ export function AvailabilityExceptionManager({
               </p>
             </div>
 
-            {editingException ? (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={resetForm}
-              >
-                Cancel edit
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={resetForm}
+            >
+              {editingException
+                ? "Cancel edit"
+                : "Cancel"}
+            </Button>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -602,15 +629,28 @@ export function AvailabilityExceptionManager({
         </form>
       ) : null}
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 className="text-xl font-bold text-slate-950">
-          Schedule exceptions
-        </h3>
+      <div className="order-1 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="text-xl font-bold text-slate-950">
+              Schedule exceptions / off days
+            </h3>
 
-        <p className="mt-1 text-sm text-slate-500">
-          Block time off or add availability outside the
-          recurring weekly schedule.
-        </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Block time off or add availability outside the
+              recurring weekly schedule.
+            </p>
+          </div>
+
+          {canCreate ? (
+            <Button
+              type="button"
+              onClick={beginCreateException}
+            >
+              + Add exception
+            </Button>
+          ) : null}
+        </div>
 
         <div className="mt-4">
           {isLoading || isError || !exceptions.length ? (

@@ -227,7 +227,7 @@ export function AvailabilityRuleForm({
           <h3 className="text-xl font-bold text-slate-950">
             {editingRule
               ? "Edit weekly schedule"
-              : "Add weekly schedule"}
+              : "Add availability"}
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
@@ -236,15 +236,13 @@ export function AvailabilityRuleForm({
           </p>
         </div>
 
-        {editingRule ? (
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={cancelEdit}
-          >
-            Cancel edit
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={cancelEdit}
+        >
+          {editingRule ? "Cancel edit" : "Cancel"}
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
