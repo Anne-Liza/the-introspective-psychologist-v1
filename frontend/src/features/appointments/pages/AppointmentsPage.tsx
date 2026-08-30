@@ -28,6 +28,12 @@ import {
   rowActionClassName,
 } from "../../../components/data/RowActionsMenu";
 import { SearchField } from "../../../components/data/SearchField";
+import {
+  appointmentDurationMinutes,
+  formatAppointmentTimeRange,
+  formatLocationSuffix,
+  normalizeAppointmentFormat,
+} from "../lib/appointmentPresentation";
 import { StatusBadge } from "../../../components/data/StatusBadge";
 import { TableToolbar } from "../../../components/data/TableToolbar";
 import {
@@ -423,31 +429,47 @@ export function AppointmentsPage() {
   const formatOptions = useMemo<
     FilterOption[]
   >(() => {
-    const formats = Array.from(
-      new Set(
-        (data ?? [])
-          .map(appointmentFormat)
-          .filter(
-            (
-              format,
-            ): format is string =>
-              Boolean(format),
-          ),
-      ),
-    ).sort();
+    const formats = new Map<
+      string,
+      string
+    >();
+
+    (data ?? []).forEach((appointment) => {
+      const format =
+        appointmentFormat(appointment);
+
+      const normalized =
+        normalizeAppointmentFormat(
+          format,
+        );
+
+      if (!format || !normalized) {
+        return;
+      }
+
+      formats.set(
+        normalized,
+        formatValue(format, format),
+      );
+    });
+
+    const options = Array.from(
+      formats.entries(),
+    )
+      .sort((a, b) =>
+        a[1].localeCompare(b[1]),
+      )
+      .map(([value, label]) => ({
+        value,
+        label,
+      }));
 
     return [
       {
         value: "all",
         label: "All formats",
       },
-      ...formats.map((format) => ({
-        value: format,
-        label: formatValue(
-          format,
-          format,
-        ),
-      })),
+      ...options,
     ];
   }, [data]);
 
@@ -536,7 +558,9 @@ export function AppointmentsPage() {
 
         const matchesFormat =
           formatFilter === "all" ||
-          effectiveFormat === formatFilter;
+          normalizeAppointmentFormat(
+            effectiveFormat,
+          ) === formatFilter;
 
         const timestamp =
           appointmentTimestamp(appointment);
@@ -959,15 +983,16 @@ export function AppointmentsPage() {
                                   effectiveFormat,
                                   "Format pending",
                                 )}
-                                {appointment.location
-                                  ? ` · ${appointment.location}`
-                                  : ""}
+                                {formatLocationSuffix(
+                                  effectiveFormat,
+                                  appointment.location,
+                                )}
                               </div>
 
-                              {appointment.service_duration_minutes ? (
+                              {appointmentDurationMinutes(appointment.start_time, appointment.end_time) ? (
                                 <div className="text-slate-500">
                                   {
-                                    appointment.service_duration_minutes
+                                    appointmentDurationMinutes(appointment.start_time, appointment.end_time)
                                   }
                                   {" minutes"}
                                 </div>
@@ -982,13 +1007,10 @@ export function AppointmentsPage() {
                               </div>
 
                               <div className="mt-1 text-slate-500">
-                                {
-                                  appointment.start_time
-                                }
-                                {" to "}
-                                {
-                                  appointment.end_time
-                                }
+                                {formatAppointmentTimeRange(
+                                  appointment.start_time,
+                                  appointment.end_time,
+                                )}
                               </div>
                             </td>
 
@@ -1115,9 +1137,10 @@ export function AppointmentsPage() {
                                 effectiveFormat,
                                 "Format pending",
                               )}
-                              {appointment.location
-                                ? ` · ${appointment.location}`
-                                : ""}
+                              {formatLocationSuffix(
+                                  effectiveFormat,
+                                  appointment.location,
+                                )}
                             </p>
                           </div>
 
@@ -1131,13 +1154,10 @@ export function AppointmentsPage() {
                               )}
                             </p>
                             <p className="text-sm text-slate-500">
-                              {
-                                appointment.start_time
-                              }
-                              {" to "}
-                              {
-                                appointment.end_time
-                              }
+                              {formatAppointmentTimeRange(
+                                  appointment.start_time,
+                                  appointment.end_time,
+                                )}
                             </p>
                           </div>
                         </div>
