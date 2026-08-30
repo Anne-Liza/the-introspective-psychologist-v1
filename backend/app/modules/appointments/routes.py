@@ -8,13 +8,15 @@ from app.modules.appointments.schemas import (
     AppointmentCreate,
     AppointmentRead,
     AppointmentUpdate,
+    TherapistAppointmentRead,
 )
+from app.modules.auth.dependencies import require_permission
 from app.modules.booking_engine.service import (
     create_scheduled_appointment,
     delete_scheduled_appointment,
     update_scheduled_appointment,
 )
-from app.modules.auth.dependencies import require_permission
+from app.modules.therapist_profiles.access import resolve_assigned_therapist_profile_id
 from app.modules.users.models import User
 
 router = APIRouter()
@@ -30,6 +32,37 @@ def list_appointments(
             Appointment.appointment_date.desc(),
             Appointment.start_time,
             Appointment.created_at.desc(),
+        )
+    ).all()
+
+
+@router.get(
+    "/mine",
+    response_model=list[TherapistAppointmentRead],
+)
+def list_my_appointments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("appointments.own.read")
+    ),
+):
+    therapist_profile_id = (
+        resolve_assigned_therapist_profile_id(
+            db,
+            current_user,
+        )
+    )
+
+    return db.scalars(
+        select(Appointment)
+        .where(
+            Appointment.therapist_profile_id
+            == therapist_profile_id
+        )
+        .order_by(
+            Appointment.appointment_date.asc(),
+            Appointment.start_time,
+            Appointment.created_at.asc(),
         )
     ).all()
 

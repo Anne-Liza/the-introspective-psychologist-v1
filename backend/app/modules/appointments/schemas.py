@@ -196,6 +196,21 @@ class AppointmentRead(AppointmentBase):
     model_config = {"from_attributes": True}
 
 
+class TherapistAppointmentRead(BaseModel):
+    id: str
+    appointment_date: date_type
+    start_time: time_type
+    end_time: time_type
+    client_name: str
+    service_id: str | None = None
+    therapist_profile_id: str | None = None
+    status: str
+    session_format: str | None = None
+    location: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class PublicAppointmentRead(BaseModel):
     id: str
     appointment_date: date_type

@@ -19,6 +19,7 @@ DEFAULT_PERMISSIONS = [
     ('settings.read', 'Read settings.'),
     ('settings.manage', 'Manage settings.'),
     ('appointments.read', 'Read appointments.'),
+    ('appointments.own.read', 'Read appointments assigned to the current therapist.'),
     ('appointments.create', 'Create appointments.'),
     ('appointments.update', 'Update appointments.'),
     ('appointments.delete', 'Delete appointments.'),
@@ -99,7 +100,7 @@ DEFAULT_PERMISSIONS = [
 DEFAULT_ROLES = [
     ('Super Developer', 'Technical bootstrap, maintenance, and audited break-glass recovery access.', ['system.all']),
     ('Practice Admin', 'Owns and manages this practice, its staff, public content, operations, payments, and configuration.', ['appointments.create', 'appointments.delete', 'appointments.read', 'appointments.update', 'availability.create', 'availability.delete', 'availability.own.create', 'availability.own.delete', 'availability.own.read', 'availability.own.update', 'availability.read', 'availability.update', 'blog.create', 'blog.delete', 'blog.read', 'blog.update', 'booking_engine.delete', 'booking_engine.read', 'booking_engine.update', 'client_records.create', 'client_records.read', 'client_records.update', 'commerce_core.create', 'commerce_core.delete', 'commerce_core.read', 'commerce_core.update', 'contact_messages.delete', 'contact_messages.read', 'contact_messages.update', 'email_logs.read', 'email_templates.create', 'email_templates.read', 'email_templates.update', 'files.delete', 'files.read', 'files.upload', 'fulfillment.create', 'fulfillment.read', 'fulfillment.update', 'invitations.manage', 'invitations.read', 'landing_sections.create', 'landing_sections.delete', 'landing_sections.read', 'landing_sections.update', 'mpesa_payments.initiate', 'mpesa_payments.read', 'payment_attempts.create', 'payment_attempts.read', 'payment_attempts.verify', 'payment_requests.create', 'payment_requests.read', 'payment_requests.update', 'receipts.create', 'receipts.read', 'receipts.update', 'roles.read', 'services.create', 'services.delete', 'services.read', 'services.update', 'settings.manage', 'settings.read', 'therapist_profiles.create', 'therapist_profiles.delete', 'therapist_profiles.own.create', 'therapist_profiles.own.read', 'therapist_profiles.own.submit', 'therapist_profiles.own.update', 'therapist_profiles.publish', 'therapist_profiles.read', 'therapist_profiles.review', 'therapist_profiles.update', 'users.read', 'users.update']),
-    ('Therapist', 'Regular therapist staff who manage their own professional profile and availability through current-user scoped workflows.', ['therapist_profiles.own.read', 'therapist_profiles.own.create', 'therapist_profiles.own.update', 'therapist_profiles.own.submit', 'availability.own.read', 'availability.own.create', 'availability.own.update', 'availability.own.delete']),
+    ('Therapist', 'Regular therapist staff who manage their own professional profile and availability through current-user scoped workflows.', ['therapist_profiles.own.read', 'therapist_profiles.own.create', 'therapist_profiles.own.update', 'therapist_profiles.own.submit', 'availability.own.read', 'availability.own.create', 'availability.own.update', 'availability.own.delete', 'appointments.own.read']),
 ]
 
 DEFAULT_SETTINGS = [
