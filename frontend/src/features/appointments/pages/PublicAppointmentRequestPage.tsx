@@ -87,11 +87,16 @@ export function PublicAppointmentRequestPage() {
   const [searchParams] = useSearchParams();
   const requestedServiceSlug =
     searchParams.get("service");
+  const requestedTherapistSlug =
+    searchParams.get("therapist");
 
   const [serviceId, setServiceId] = useState("");
   const [sessionFormat, setSessionFormat] = useState("");
   const [location, setLocation] = useState("");
-  const [preferredTherapistId, setPreferredTherapistId] = useState("");
+  const [
+    preferredTherapistId,
+    setPreferredTherapistId,
+  ] = useState<string | null>(null);
   const [appointmentDate, setAppointmentDate] = useState("");
   const [selectedSlot, setSelectedSlot] = useState("");
   const [clientName, setClientName] = useState("");
@@ -110,6 +115,20 @@ export function PublicAppointmentRequestPage() {
     queryKey: ["public-therapist-profiles"],
     queryFn: fetchPublicTherapistProfiles,
   });
+
+  const requestedTherapist =
+    requestedTherapistSlug
+      ? therapistsQuery.data?.find(
+          (therapist) =>
+            therapist.slug ===
+            requestedTherapistSlug,
+        )
+      : undefined;
+
+  const effectivePreferredTherapistId =
+    preferredTherapistId ??
+    requestedTherapist?.id ??
+    "";
 
   const selectedService = servicesQuery.data?.find(
     (service) => service.id === serviceId,
@@ -206,17 +225,17 @@ export function PublicAppointmentRequestPage() {
       serviceId,
       sessionFormat,
       location,
-      preferredTherapistId,
+      effectivePreferredTherapistId,
     ],
     queryFn: () =>
       fetchPublicAvailableDates({
         service_id: serviceId,
         session_format: sessionFormat,
         ...(needsLocation ? { location } : {}),
-        ...(preferredTherapistId
+        ...(effectivePreferredTherapistId
           ? {
               preferred_therapist_profile_id:
-                preferredTherapistId,
+                effectivePreferredTherapistId,
             }
           : {}),
       }),
@@ -234,7 +253,7 @@ export function PublicAppointmentRequestPage() {
       serviceId,
       sessionFormat,
       location,
-      preferredTherapistId,
+      effectivePreferredTherapistId,
     ],
     queryFn: () =>
       fetchPublicBookableSlots({
@@ -242,18 +261,67 @@ export function PublicAppointmentRequestPage() {
         service_id: serviceId,
         session_format: sessionFormat,
         ...(needsLocation ? { location } : {}),
-        ...(preferredTherapistId
-          ? { preferred_therapist_profile_id: preferredTherapistId }
+        ...(effectivePreferredTherapistId
+          ? {
+              preferred_therapist_profile_id:
+                effectivePreferredTherapistId,
+            }
           : {}),
       }),
     enabled: readyForSlots,
   });
 
   const eligibleTherapists = useMemo(() => {
-    const profiles = therapistsQuery.data ?? [];
-    if (!sessionFormat) return profiles;
-    return profiles.filter((profile) => normalize(profile.session_formats).includes(normalize(sessionFormat)));
-  }, [sessionFormat, therapistsQuery.data]);
+    const profiles =
+      therapistsQuery.data ?? [];
+
+    if (!sessionFormat) {
+      return profiles;
+    }
+
+    return profiles.filter((profile) =>
+      normalize(
+        profile.session_formats,
+      ).includes(
+        normalize(sessionFormat),
+      ),
+    );
+  }, [
+    sessionFormat,
+    therapistsQuery.data,
+  ]);
+
+  const selectedTherapist =
+    therapistsQuery.data?.find(
+      (therapist) =>
+        therapist.id ===
+        effectivePreferredTherapistId,
+    );
+
+  function therapistSupportsFormat(
+    therapistId: string,
+    format: string,
+  ) {
+    if (!therapistId || !format) {
+      return true;
+    }
+
+    const therapist =
+      therapistsQuery.data?.find(
+        (profile) =>
+          profile.id === therapistId,
+      );
+
+    if (!therapist) {
+      return false;
+    }
+
+    return normalize(
+      therapist.session_formats,
+    ).includes(
+      normalize(format),
+    );
+  }
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -284,7 +352,8 @@ export function PublicAppointmentRequestPage() {
         end_time: slot.end_time,
         service_id: serviceId,
         preferred_therapist_profile_id:
-          preferredTherapistId || null,
+          effectivePreferredTherapistId ||
+          null,
         session_format: sessionFormat,
         location: needsLocation
           ? location
@@ -478,12 +547,30 @@ export function PublicAppointmentRequestPage() {
                     ).includes(normalize(format.key));
                   });
 
+                  const nextFormat =
+                    nextFormats.length === 1
+                      ? nextFormats[0].key
+                      : "";
+
                   setServiceId(nextServiceId);
                   setSessionFormat(
-                    nextFormats.length === 1 ? nextFormats[0].key : "",
+                    nextFormat,
                   );
                   setLocation("");
-                  setPreferredTherapistId("");
+
+                  if (
+                    effectivePreferredTherapistId &&
+                    nextFormat &&
+                    !therapistSupportsFormat(
+                      effectivePreferredTherapistId,
+                      nextFormat,
+                    )
+                  ) {
+                    setPreferredTherapistId(
+                      "",
+                    );
+                  }
+
                   setAppointmentDate("");
                   resetSlotSelection();
                 }}
@@ -517,9 +604,26 @@ export function PublicAppointmentRequestPage() {
                       value={format.key}
                       checked={sessionFormat === format.key}
                       onChange={(event) => {
-                        setSessionFormat(event.target.value);
+                        const nextFormat =
+                          event.target.value;
+
+                        setSessionFormat(
+                          nextFormat,
+                        );
                         setLocation("");
-                        setPreferredTherapistId("");
+
+                        if (
+                          effectivePreferredTherapistId &&
+                          !therapistSupportsFormat(
+                            effectivePreferredTherapistId,
+                            nextFormat,
+                          )
+                        ) {
+                          setPreferredTherapistId(
+                            "",
+                          );
+                        }
+
                         setAppointmentDate("");
                         resetSlotSelection();
                       }}
@@ -553,10 +657,35 @@ export function PublicAppointmentRequestPage() {
               </label>
             ) : null}
 
+            {selectedTherapist &&
+            requestedTherapistSlug ? (
+              <div className="rounded-2xl border border-[#cad5c1] bg-[#eef3e9] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#738064]">
+                  Booking with
+                </p>
+
+                <p className="mt-1 font-serif text-xl font-semibold text-[#26311f]">
+                  {
+                    selectedTherapist.full_name
+                  }
+                </p>
+
+                {selectedTherapist.title ? (
+                  <p className="mt-1 text-sm text-[#53604b]">
+                    {
+                      selectedTherapist.title
+                    }
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <label className="block text-sm font-medium">
               Therapist preference
               <select
-                value={preferredTherapistId}
+                value={
+                  effectivePreferredTherapistId
+                }
                 onChange={(event) => {
                   setPreferredTherapistId(event.target.value);
                   setAppointmentDate("");
