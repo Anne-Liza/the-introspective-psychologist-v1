@@ -43,6 +43,11 @@ from app.core.booking_state import (
 )
 from app.core.time import utc_now
 from app.modules.appointments.models import Appointment
+from app.modules.appointments.notifications import (
+    notify_therapist_appointment,
+    therapist_notification_event,
+    therapist_notification_snapshot,
+)
 from app.modules.availability.models import AvailabilityException, AvailabilityRule
 from app.modules.booking_engine.models import (
     BookingHold,
@@ -70,6 +75,25 @@ from app.modules.services.models import Service
 from app.modules.therapist_profiles.models import TherapistProfile
 
 DEFAULT_HOLD_MINUTES = 10
+
+
+def _notify_therapist_for_confirmation(
+    db: Session,
+    confirmation: PublicBookingConfirmationRead,
+) -> None:
+    appointment = db.get(
+        Appointment,
+        confirmation.appointment_id,
+    )
+
+    if appointment is None:
+        return
+
+    notify_therapist_appointment(
+        db,
+        appointment=appointment,
+        event="assigned",
+    )
 
 
 def _booking_local_now() -> datetime:
@@ -665,6 +689,18 @@ def create_scheduled_appointment(
         db.add(appointment)
         db.commit()
         db.refresh(appointment)
+
+        if (
+            appointment.therapist_profile_id
+            and appointment.status
+            in {"requested", "confirmed"}
+        ):
+            notify_therapist_appointment(
+                db,
+                appointment=appointment,
+                event="assigned",
+            )
+
         return appointment
     except Exception:
         db.rollback()
@@ -689,6 +725,12 @@ def update_scheduled_appointment(
 
         if appointment is None:
             return None
+
+        notification_before = (
+            therapist_notification_snapshot(
+                appointment
+            )
+        )
 
         current_status = appointment.status
         next_status = str(
@@ -831,6 +873,21 @@ def update_scheduled_appointment(
         db.add(appointment)
         db.commit()
         db.refresh(appointment)
+
+        notification_event = (
+            therapist_notification_event(
+                notification_before,
+                appointment,
+            )
+        )
+
+        if notification_event is not None:
+            notify_therapist_appointment(
+                db,
+                appointment=appointment,
+                event=notification_event,
+            )
+
         return appointment
     except Exception:
         db.rollback()
@@ -1830,6 +1887,10 @@ def create_public_booking(
         )
 
         db.commit()
+        _notify_therapist_for_confirmation(
+            db,
+            confirmation,
+        )
         return confirmation
     except Exception:
         db.rollback()
@@ -2122,6 +2183,10 @@ def settle_paid_booking_payment_request(
         )
 
         db.commit()
+        _notify_therapist_for_confirmation(
+            db,
+            confirmation,
+        )
         return confirmation
 
     except Exception:
@@ -2248,6 +2313,12 @@ def confirm_public_hold(
     if commit:
         db.commit()
         db.refresh(appointment)
+
+        notify_therapist_appointment(
+            db,
+            appointment=appointment,
+            event="assigned",
+        )
     else:
         db.flush()
 

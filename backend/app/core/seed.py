@@ -3,16 +3,15 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.demo_seed import seed_therapy_demo_data
 from app.core.security import hash_password
 from app.modules.app_settings.models import AppSetting
-from app.modules.roles.models import Permission, Role
-from app.modules.users.models import User
-from app.modules.landing_sections.models import LandingSection
-from app.modules.email_templates.models import EmailTemplate
 from app.modules.blog.models import BlogPost
 from app.modules.commerce_core.models import CommerceItem
-from app.core.demo_seed import seed_therapy_demo_data
-
+from app.modules.email_templates.models import EmailTemplate
+from app.modules.landing_sections.models import LandingSection
+from app.modules.roles.models import Permission, Role
+from app.modules.users.models import User
 
 DEFAULT_PERMISSIONS = [
     ('system.all', 'Full system access.'),
@@ -176,6 +175,65 @@ DEFAULT_EMAIL_TEMPLATES = [
     ('appointment_request_received', 'Appointment request received', 'We received your appointment request', 'Hello {{client_name}},\n\nThank you for reaching out to {{site_name}}. Your appointment request has been received and will be reviewed.\n\nThis message confirms receipt only. It is not a clinical assessment or emergency support response.\n\nBest,\n{{site_name}}', 'Sent after a public appointment request is submitted.', True),
     ('appointment_confirmed', 'Appointment confirmed', 'Your appointment is confirmed', 'Hello {{client_name}},\n\nYour appointment with {{site_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.\n\nIf you need to change the appointment, please reply to this email or use the contact details provided by the practice.\n\nBest,\n{{site_name}}', 'Sent when an appointment is confirmed.', True),
     ('appointment_cancelled', 'Appointment cancelled', 'Your appointment has been cancelled', 'Hello {{client_name}},\n\nYour appointment scheduled for {{appointment_date}} at {{appointment_time}} has been cancelled.\n\nIf you would like to request another time, please contact the practice.\n\nBest,\n{{site_name}}', 'Sent when an appointment is cancelled.', True),
+    (
+        "therapist_appointment_assigned",
+        "Therapist appointment assigned",
+        "New appointment assigned",
+        "Hello {{therapist_name}},\n\n"
+        "A new appointment has been assigned to you.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n"
+        "Status: {{appointment_status}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent to a therapist when an appointment is assigned.",
+        True,
+    ),
+    (
+        "therapist_appointment_updated",
+        "Therapist appointment updated",
+        "Appointment updated",
+        "Hello {{therapist_name}},\n\n"
+        "An appointment on your schedule has been updated.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n"
+        "Status: {{appointment_status}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent when therapist-visible appointment details change.",
+        True,
+    ),
+    (
+        "therapist_appointment_cancelled",
+        "Therapist appointment cancelled",
+        "Appointment cancelled",
+        "Hello {{therapist_name}},\n\n"
+        "An appointment on your schedule has been cancelled.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent when an assigned appointment is cancelled.",
+        True,
+    ),
     ('payment_request_sent', 'Payment request sent', 'Payment request from {{site_name}}', 'Hello {{client_name}},\n\nA payment request for {{payment_amount}} has been created for {{site_name}}.\n\nPlease follow the payment instructions shared with you. Your booking or service may remain pending until payment is confirmed.\n\nBest,\n{{site_name}}', 'Sent when a payment request is created.', True),
     ('payment_received', 'Payment received', 'Payment received by {{site_name}}', 'Hello {{client_name}},\n\nYour payment of {{payment_amount}} has been received. Thank you.\n\nBest,\n{{site_name}}', 'Sent when a payment is verified.', True),
     ('receipt_issued', 'Receipt issued', 'Your receipt from {{site_name}}', 'Hello {{client_name}},\n\nYour receipt has been issued.\n\nReceipt number: {{receipt_number}}\nAmount: {{payment_amount}}\n\nBest,\n{{site_name}}', 'Sent when a receipt record is issued.', True),
