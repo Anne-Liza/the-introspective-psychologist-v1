@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
+import { Link } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
 import { useAuth } from "../../auth/context/AuthContext";
@@ -13,6 +14,7 @@ import {
   createTherapistProfile,
   deleteTherapistProfile,
   fetchTherapistProfilePublicationQueue,
+  fetchTherapistProfileReviewQueue,
   fetchTherapistProfiles,
   publishTherapistProfileRevision,
   slugify,
@@ -63,6 +65,20 @@ export function TherapistProfilesPage() {
     queryFn: fetchTherapistProfilePublicationQueue,
     enabled: canPublishProfiles,
   });
+
+  const {
+    data: reviewQueue = [],
+  } = useQuery({
+    queryKey: ["therapist-profile-review-queue"],
+    queryFn: fetchTherapistProfileReviewQueue,
+    enabled: canReviewProfiles,
+  });
+
+  function pendingReviewFor(profileId: string) {
+    return reviewQueue.find(
+      (item) => item.profile_id === profileId,
+    );
+  }
 
   function publicationActionFor(profileId: string) {
     return (
@@ -400,9 +416,15 @@ export function TherapistProfilesPage() {
                   </td>
                   <td className="p-4">
                     <div>
-                      {profile.is_published
-                        ? "Published"
-                        : "Not published"}
+                      {pendingReviewFor(profile.id)
+                        ? "Pending review"
+                        : publicationActionFor(profile.id) &&
+                            !publicationActionFor(profile.id)!
+                              .revision.is_current_publication
+                          ? "Approved — awaiting publication"
+                          : profile.is_published
+                            ? "Published"
+                            : "Not published"}
                     </div>
 
                     {publicationActionFor(profile.id) ? (
@@ -420,6 +442,17 @@ export function TherapistProfilesPage() {
                   </td>
                   <td className="p-4">
                     <div className="flex flex-wrap gap-2">
+                      {pendingReviewFor(profile.id) ? (
+                        <Link
+                          to={`/dashboard/therapist-profiles/reviews/${
+                            pendingReviewFor(profile.id)!.revision.id
+                          }`}
+                          className="inline-flex items-center rounded-2xl bg-[#34422f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#253223]"
+                        >
+                          Review submission
+                        </Link>
+                      ) : null}
+
                       <Button
                         type="button"
                         onClick={() => loadProfileForEdit(profile)}
@@ -427,7 +460,9 @@ export function TherapistProfilesPage() {
                         Edit settings
                       </Button>
 
-                      {canReviewProfiles ? (
+                      {canReviewProfiles &&
+                      !pendingReviewFor(profile.id) &&
+                      !publicationActionFor(profile.id) ? (
                         <Button
                           type="button"
                           onClick={() =>

@@ -6,6 +6,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.dependencies import require_permission
 from app.modules.therapist_profiles.models import (
@@ -37,10 +38,122 @@ from app.modules.therapist_profiles.service import (
     review_profile,
     submit_profile_for_review,
 )
+from app.modules.email.service import send_email
 from app.modules.roles.models import Role
 from app.modules.users.models import User
 
 router = APIRouter()
+
+
+def _active_practice_admins(db: Session) -> list[User]:
+    return list(
+        db.scalars(
+            select(User)
+            .join(User.roles)
+            .where(
+                Role.name == "Practice Admin",
+                User.is_active.is_(True),
+            )
+        )
+        .unique()
+        .all()
+    )
+
+
+def _notify_practice_admins_profile_submitted(
+    db: Session,
+    *,
+    profile: TherapistProfile,
+    revision_id: str,
+) -> None:
+    review_url = (
+        f"{settings.FRONTEND_BASE_URL}"
+        f"/dashboard/therapist-profiles/reviews/{revision_id}"
+    )
+
+    for admin in _active_practice_admins(db):
+        send_email(
+            db,
+            to_email=admin.email,
+            subject=(
+                f"Therapist profile awaiting review: "
+                f"{profile.full_name}"
+            ),
+            body=(
+                f"{profile.full_name} submitted a therapist "
+                "profile for review.\n\n"
+                f"Review therapist profiles: {review_url}"
+            ),
+        )
+
+
+def _notify_therapist_review_result(
+    db: Session,
+    *,
+    profile: TherapistProfile,
+    decision: str,
+) -> None:
+    if not profile.user_id:
+        return
+
+    therapist = db.scalar(
+        select(User).where(User.id == profile.user_id)
+    )
+    if therapist is None or not therapist.is_active:
+        return
+
+    profile_url = (
+        f"{settings.FRONTEND_BASE_URL}/dashboard/my-profile"
+    )
+
+    if decision == REVIEW_CHANGES_REQUESTED:
+        subject = "Changes requested for your therapist profile"
+        message = (
+            "Your therapist profile has been reviewed and "
+            "changes were requested."
+        )
+    else:
+        subject = "Your therapist profile has been approved"
+        message = (
+            "Your therapist profile has been approved and is "
+            "awaiting publication."
+        )
+
+    send_email(
+        db,
+        to_email=therapist.email,
+        subject=subject,
+        body=f"{message}\n\nView your profile: {profile_url}",
+    )
+
+
+def _notify_therapist_profile_published(
+    db: Session,
+    *,
+    profile: TherapistProfile,
+) -> None:
+    if not profile.user_id:
+        return
+
+    therapist = db.scalar(
+        select(User).where(User.id == profile.user_id)
+    )
+    if therapist is None or not therapist.is_active:
+        return
+
+    public_url = (
+        f"{settings.FRONTEND_BASE_URL}/therapists/{profile.slug}"
+    )
+
+    send_email(
+        db,
+        to_email=therapist.email,
+        subject="Your therapist profile is now published",
+        body=(
+            "Your therapist profile has been published and is "
+            f"now visible on the website.\n\n{public_url}"
+        ),
+    )
 
 
 def _slugify_therapist_name(value: str) -> str:
@@ -507,6 +620,12 @@ def submit_my_therapist_profile(
     db.add(revision)
     db.commit()
 
+    _notify_practice_admins_profile_submitted(
+        db,
+        profile=profile,
+        revision_id=revision.id,
+    )
+
     return _self_profile_response(db, profile)
 
 
@@ -619,6 +738,20 @@ def review_therapist_profile_revision(
     db.add(revision)
     db.commit()
     db.refresh(revision)
+
+    profile = db.scalar(
+        select(TherapistProfile).where(
+            TherapistProfile.id
+            == revision.therapist_profile_id
+        )
+    )
+
+    if profile is not None:
+        _notify_therapist_review_result(
+            db,
+            profile=profile,
+            decision=payload.decision,
+        )
 
     return _admin_review_response(db, revision)
 
@@ -765,6 +898,12 @@ def publish_therapist_profile_revision(
 
     db.refresh(profile)
     db.refresh(revision)
+
+    _notify_therapist_profile_published(
+        db,
+        profile=profile,
+    )
+
     return _admin_review_response(db, revision)
 
 

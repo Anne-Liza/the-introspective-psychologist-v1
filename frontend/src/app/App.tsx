@@ -49,6 +49,7 @@ import { ReceiptsPage } from "../features/receipts/pages/ReceiptsPage";
 import { PublicReceiptPage } from "../features/receipts/pages/PublicReceiptPage";
 import { ServicesPage } from "../features/services/pages/ServicesPage";
 import { TherapistProfilesPage } from "../features/therapist-profiles/pages/TherapistProfilesPage";
+import { TherapistProfileReviewPage } from "../features/therapist-profiles/pages/TherapistProfileReviewPage";
 import { MyTherapistProfilePage } from "../features/therapist-profiles/pages/MyTherapistProfilePage";
 
 export function App() {
@@ -122,6 +123,14 @@ export function App() {
         <Route path="payment-requests" element={<PermissionRoute permission="payment_requests.read"><PaymentRequestsPage /></PermissionRoute>} />
         <Route path="receipts" element={<PermissionRoute permission="receipts.read"><ReceiptsPage /></PermissionRoute>} />
         <Route path="services" element={<PermissionRoute permission="services.read"><ServicesPage /></PermissionRoute>} />
+        <Route
+          path="therapist-profiles/reviews/:revisionId"
+          element={
+            <PermissionRoute permission="therapist_profiles.review">
+              <TherapistProfileReviewPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="therapist-profiles" element={<PermissionRoute permission="therapist_profiles.read"><TherapistProfilesPage /></PermissionRoute>} />
         <Route path="my-profile" element={<PermissionRoute permission="therapist_profiles.own.read"><MyTherapistProfilePage /></PermissionRoute>} />
       </Route>
