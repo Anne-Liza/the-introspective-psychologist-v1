@@ -110,7 +110,9 @@ def test_therapist_has_own_appointments_permission():
     assert dependency(therapist) is therapist
 
 
-def test_admin_list_returns_practice_appointments():
+def test_admin_list_returns_practice_appointments(
+    monkeypatch,
+):
     appointments = [
         make_appointment(
             appointment_id="appointment-1",
@@ -128,6 +130,35 @@ def test_admin_list_returns_practice_appointments():
         def scalars(self, _statement):
             return ScalarResults(appointments)
 
+    monkeypatch.setattr(
+        routes,
+        "_load_services_by_id",
+        lambda db, appointments: {
+            "service-1": SimpleNamespace(
+                id="service-1",
+                name="Individual Therapy",
+                category="Individual",
+                service_format="therapy",
+                duration_minutes=60,
+            )
+        },
+    )
+
+    monkeypatch.setattr(
+        routes,
+        "_load_therapists_by_id",
+        lambda db, appointments: {
+            "therapist-1": SimpleNamespace(
+                id="therapist-1",
+                full_name="Therapist One",
+            ),
+            "therapist-2": SimpleNamespace(
+                id="therapist-2",
+                full_name="Therapist Two",
+            ),
+        },
+    )
+
     result = routes.list_appointments(
         db=DB(),
         current_user=make_user(
@@ -136,6 +167,12 @@ def test_admin_list_returns_practice_appointments():
     )
 
     assert len(result) == 2
+    assert result[0].service_name == (
+        "Individual Therapy"
+    )
+    assert result[0].therapist_name == (
+        "Therapist One"
+    )
     assert {
         appointment.therapist_profile_id
         for appointment in result
@@ -174,6 +211,20 @@ def test_my_appointments_query_is_scoped_to_current_therapist(
         lambda db, current_user: "therapist-1",
     )
 
+    monkeypatch.setattr(
+        routes,
+        "_load_services_by_id",
+        lambda db, appointments: {
+            "service-1": SimpleNamespace(
+                id="service-1",
+                name="Individual Therapy",
+                category="Individual",
+                service_format="therapy",
+                duration_minutes=60,
+            )
+        },
+    )
+
     result = routes.list_my_appointments(
         db=DB(),
         current_user=therapist,
@@ -183,6 +234,13 @@ def test_my_appointments_query_is_scoped_to_current_therapist(
     assert result[0].therapist_profile_id == (
         "therapist-1"
     )
+    assert result[0].service_name == (
+        "Individual Therapy"
+    )
+    assert result[0].service_category == (
+        "Individual"
+    )
+    assert result[0].service_duration_minutes == 60
 
     assert len(captured_statements) == 1
 
