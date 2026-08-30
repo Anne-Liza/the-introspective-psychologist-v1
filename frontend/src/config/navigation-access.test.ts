@@ -83,3 +83,48 @@ it("supports capability-based exclusion for self-service navigation", () => {
 
   expect(adminResult).toEqual([]);
 });
+
+it("supports any-of permissions for shared navigation", () => {
+  const sections = [
+    {
+      title: "Practice",
+      items: [
+        {
+          label: "Appointments",
+          href: "/dashboard/appointments",
+          permission: [
+            "appointments.read",
+            "appointments.own.read",
+          ],
+        },
+      ],
+    },
+  ];
+
+  const adminResult = filterNavigationSections(
+    sections,
+    (permission) =>
+      permission === "appointments.read",
+  );
+
+  expect(adminResult[0]?.items).toHaveLength(1);
+
+  const therapistResult =
+    filterNavigationSections(
+      sections,
+      (permission) =>
+        permission === "appointments.own.read",
+    );
+
+  expect(
+    therapistResult[0]?.items,
+  ).toHaveLength(1);
+
+  const noAccessResult =
+    filterNavigationSections(
+      sections,
+      () => false,
+    );
+
+  expect(noAccessResult).toEqual([]);
+});

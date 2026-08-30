@@ -192,6 +192,30 @@ class AppointmentUpdate(BaseModel):
 
 class AppointmentRead(AppointmentBase):
     id: str
+    service_name: str | None = None
+    service_category: str | None = None
+    service_format: str | None = None
+    service_duration_minutes: int | None = None
+    therapist_name: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class TherapistAppointmentRead(BaseModel):
+    id: str
+    appointment_date: date_type
+    start_time: time_type
+    end_time: time_type
+    client_name: str
+    service_id: str | None = None
+    therapist_profile_id: str | None = None
+    service_name: str | None = None
+    service_category: str | None = None
+    service_format: str | None = None
+    service_duration_minutes: int | None = None
+    status: str
+    session_format: str | None = None
+    location: str | None = None
 
     model_config = {"from_attributes": True}
 

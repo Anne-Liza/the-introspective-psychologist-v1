@@ -1,7 +1,7 @@
 export type SidebarNavigationItem = {
   label: string;
   href: string;
-  permission?: string;
+  permission?: string | string[];
   exclude_permission?: string;
 };
 
@@ -16,7 +16,14 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
     items: [
       { label: "Dashboard", href: "/dashboard" },
       { label: "My Profile", href: "/dashboard/my-profile", permission: "therapist_profiles.own.read", exclude_permission: "therapist_profiles.read" },
-      { label: "Appointments", href: "/dashboard/appointments", permission: "appointments.read" },
+      {
+        label: "Appointments",
+        href: "/dashboard/appointments",
+        permission: [
+          "appointments.read",
+          "appointments.own.read",
+        ],
+      },
       { label: "Booking Holds", href: "/dashboard/booking-holds", permission: "booking_engine.read" },
       { label: "Client Records", href: "/dashboard/client-records", permission: "client_records.read" },
       { label: "Services", href: "/dashboard/services", permission: "services.read" },

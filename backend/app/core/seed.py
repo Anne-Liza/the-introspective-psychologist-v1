@@ -3,22 +3,22 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
+from app.core.demo_seed import seed_therapy_demo_data
 from app.core.security import hash_password
 from app.modules.app_settings.models import AppSetting
-from app.modules.roles.models import Permission, Role
-from app.modules.users.models import User
-from app.modules.landing_sections.models import LandingSection
-from app.modules.email_templates.models import EmailTemplate
 from app.modules.blog.models import BlogPost
 from app.modules.commerce_core.models import CommerceItem
-from app.core.demo_seed import seed_therapy_demo_data
-
+from app.modules.email_templates.models import EmailTemplate
+from app.modules.landing_sections.models import LandingSection
+from app.modules.roles.models import Permission, Role
+from app.modules.users.models import User
 
 DEFAULT_PERMISSIONS = [
     ('system.all', 'Full system access.'),
     ('settings.read', 'Read settings.'),
     ('settings.manage', 'Manage settings.'),
     ('appointments.read', 'Read appointments.'),
+    ('appointments.own.read', 'Read appointments assigned to the current therapist.'),
     ('appointments.create', 'Create appointments.'),
     ('appointments.update', 'Update appointments.'),
     ('appointments.delete', 'Delete appointments.'),
@@ -99,7 +99,7 @@ DEFAULT_PERMISSIONS = [
 DEFAULT_ROLES = [
     ('Super Developer', 'Technical bootstrap, maintenance, and audited break-glass recovery access.', ['system.all']),
     ('Practice Admin', 'Owns and manages this practice, its staff, public content, operations, payments, and configuration.', ['appointments.create', 'appointments.delete', 'appointments.read', 'appointments.update', 'availability.create', 'availability.delete', 'availability.own.create', 'availability.own.delete', 'availability.own.read', 'availability.own.update', 'availability.read', 'availability.update', 'blog.create', 'blog.delete', 'blog.read', 'blog.update', 'booking_engine.delete', 'booking_engine.read', 'booking_engine.update', 'client_records.create', 'client_records.read', 'client_records.update', 'commerce_core.create', 'commerce_core.delete', 'commerce_core.read', 'commerce_core.update', 'contact_messages.delete', 'contact_messages.read', 'contact_messages.update', 'email_logs.read', 'email_templates.create', 'email_templates.read', 'email_templates.update', 'files.delete', 'files.read', 'files.upload', 'fulfillment.create', 'fulfillment.read', 'fulfillment.update', 'invitations.manage', 'invitations.read', 'landing_sections.create', 'landing_sections.delete', 'landing_sections.read', 'landing_sections.update', 'mpesa_payments.initiate', 'mpesa_payments.read', 'payment_attempts.create', 'payment_attempts.read', 'payment_attempts.verify', 'payment_requests.create', 'payment_requests.read', 'payment_requests.update', 'receipts.create', 'receipts.read', 'receipts.update', 'roles.read', 'services.create', 'services.delete', 'services.read', 'services.update', 'settings.manage', 'settings.read', 'therapist_profiles.create', 'therapist_profiles.delete', 'therapist_profiles.own.create', 'therapist_profiles.own.read', 'therapist_profiles.own.submit', 'therapist_profiles.own.update', 'therapist_profiles.publish', 'therapist_profiles.read', 'therapist_profiles.review', 'therapist_profiles.update', 'users.read', 'users.update']),
-    ('Therapist', 'Regular therapist staff who manage their own professional profile and availability through current-user scoped workflows.', ['therapist_profiles.own.read', 'therapist_profiles.own.create', 'therapist_profiles.own.update', 'therapist_profiles.own.submit', 'availability.own.read', 'availability.own.create', 'availability.own.update', 'availability.own.delete']),
+    ('Therapist', 'Regular therapist staff who manage their own professional profile and availability through current-user scoped workflows.', ['therapist_profiles.own.read', 'therapist_profiles.own.create', 'therapist_profiles.own.update', 'therapist_profiles.own.submit', 'availability.own.read', 'availability.own.create', 'availability.own.update', 'availability.own.delete', 'appointments.own.read']),
 ]
 
 DEFAULT_SETTINGS = [
@@ -175,6 +175,65 @@ DEFAULT_EMAIL_TEMPLATES = [
     ('appointment_request_received', 'Appointment request received', 'We received your appointment request', 'Hello {{client_name}},\n\nThank you for reaching out to {{site_name}}. Your appointment request has been received and will be reviewed.\n\nThis message confirms receipt only. It is not a clinical assessment or emergency support response.\n\nBest,\n{{site_name}}', 'Sent after a public appointment request is submitted.', True),
     ('appointment_confirmed', 'Appointment confirmed', 'Your appointment is confirmed', 'Hello {{client_name}},\n\nYour appointment with {{site_name}} is confirmed for {{appointment_date}} at {{appointment_time}}.\n\nIf you need to change the appointment, please reply to this email or use the contact details provided by the practice.\n\nBest,\n{{site_name}}', 'Sent when an appointment is confirmed.', True),
     ('appointment_cancelled', 'Appointment cancelled', 'Your appointment has been cancelled', 'Hello {{client_name}},\n\nYour appointment scheduled for {{appointment_date}} at {{appointment_time}} has been cancelled.\n\nIf you would like to request another time, please contact the practice.\n\nBest,\n{{site_name}}', 'Sent when an appointment is cancelled.', True),
+    (
+        "therapist_appointment_assigned",
+        "Therapist appointment assigned",
+        "New appointment assigned",
+        "Hello {{therapist_name}},\n\n"
+        "A new appointment has been assigned to you.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n"
+        "Status: {{appointment_status}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent to a therapist when an appointment is assigned.",
+        True,
+    ),
+    (
+        "therapist_appointment_updated",
+        "Therapist appointment updated",
+        "Appointment updated",
+        "Hello {{therapist_name}},\n\n"
+        "An appointment on your schedule has been updated.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n"
+        "Status: {{appointment_status}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent when therapist-visible appointment details change.",
+        True,
+    ),
+    (
+        "therapist_appointment_cancelled",
+        "Therapist appointment cancelled",
+        "Appointment cancelled",
+        "Hello {{therapist_name}},\n\n"
+        "An appointment on your schedule has been cancelled.\n\n"
+        "Client: {{client_name}}\n"
+        "Service: {{service_name}}\n"
+        "Date: {{appointment_date}}\n"
+        "Time: {{appointment_time}}\n"
+        "Format: {{session_format}}\n"
+        "Location: {{location}}\n\n"
+        "View your appointments:\n"
+        "{{appointments_url}}\n\n"
+        "Best,\n"
+        "{{site_name}}",
+        "Sent when an assigned appointment is cancelled.",
+        True,
+    ),
     ('payment_request_sent', 'Payment request sent', 'Payment request from {{site_name}}', 'Hello {{client_name}},\n\nA payment request for {{payment_amount}} has been created for {{site_name}}.\n\nPlease follow the payment instructions shared with you. Your booking or service may remain pending until payment is confirmed.\n\nBest,\n{{site_name}}', 'Sent when a payment request is created.', True),
     ('payment_received', 'Payment received', 'Payment received by {{site_name}}', 'Hello {{client_name}},\n\nYour payment of {{payment_amount}} has been received. Thank you.\n\nBest,\n{{site_name}}', 'Sent when a payment is verified.', True),
     ('receipt_issued', 'Receipt issued', 'Your receipt from {{site_name}}', 'Hello {{client_name}},\n\nYour receipt has been issued.\n\nReceipt number: {{receipt_number}}\nAmount: {{payment_amount}}\n\nBest,\n{{site_name}}', 'Sent when a receipt record is issued.', True),

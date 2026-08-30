@@ -23,6 +23,11 @@ export type Appointment = {
   client_phone: string | null;
   service_id: string | null;
   therapist_profile_id: string | null;
+  service_name: string | null;
+  service_category: string | null;
+  service_format: string | null;
+  service_duration_minutes: number | null;
+  therapist_name: string | null;
   status: AppointmentStatus;
   session_format: string | null;
   location: string | null;
@@ -34,14 +39,44 @@ export type Appointment = {
 
 export type AppointmentPayload = Omit<
   Appointment,
-  "id"
+  | "id"
+  | "service_name"
+  | "service_category"
+  | "service_format"
+  | "service_duration_minutes"
+  | "therapist_name"
 >;
+
+export type TherapistAppointment = {
+  id: string;
+  appointment_date: string;
+  start_time: string;
+  end_time: string;
+  client_name: string;
+  service_id: string | null;
+  therapist_profile_id: string | null;
+  service_name: string | null;
+  service_category: string | null;
+  service_format: string | null;
+  service_duration_minutes: number | null;
+  status: AppointmentStatus;
+  session_format: string | null;
+  location: string | null;
+};
 
 export async function fetchAppointments(): Promise<
   Appointment[]
 > {
   return (
     await apiClient.get("/appointments")
+  ).data;
+}
+
+export async function fetchMyAppointments(): Promise<
+  TherapistAppointment[]
+> {
+  return (
+    await apiClient.get("/appointments/mine")
   ).data;
 }
 
