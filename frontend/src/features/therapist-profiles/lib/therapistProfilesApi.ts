@@ -252,3 +252,49 @@ export async function submitMyTherapistProfile() {
   );
   return response.data;
 }
+
+export async function fetchTherapistProfileReviewQueue() {
+  const response = await apiClient.get<TherapistProfileAdminReview[]>(
+    "/therapist-profiles/review-queue",
+  );
+  return response.data;
+}
+
+export async function fetchTherapistProfileRevision(
+  revisionId: string,
+) {
+  const response = await apiClient.get<TherapistProfileAdminReview>(
+    `/therapist-profiles/revisions/${revisionId}`,
+  );
+  return response.data;
+}
+
+export async function updateTherapistProfileRevision({
+  revisionId,
+  data,
+}: {
+  revisionId: string;
+  data: TherapistProfileSelfUpdatePayload;
+}) {
+  const response = await apiClient.patch<TherapistProfileAdminReview>(
+    `/therapist-profiles/revisions/${revisionId}`,
+    data,
+  );
+  return response.data;
+}
+
+export async function reviewTherapistProfileRevision({
+  revisionId,
+  decision,
+  notes,
+}: {
+  revisionId: string;
+  decision: "changes_requested" | "approved";
+  notes?: string;
+}) {
+  const response = await apiClient.post<TherapistProfileAdminReview>(
+    `/therapist-profiles/revisions/${revisionId}/review`,
+    { decision, notes },
+  );
+  return response.data;
+}
