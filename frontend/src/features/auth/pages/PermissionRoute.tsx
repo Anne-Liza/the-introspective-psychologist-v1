@@ -6,7 +6,7 @@ export function PermissionRoute({
   permission,
   children,
 }: {
-  permission: string;
+  permission: string | string[];
   children: React.ReactNode;
 }) {
   const { hasPermission, isLoading } = useAuth();
@@ -15,7 +15,11 @@ export function PermissionRoute({
     return <div className="p-8 text-slate-600">Checking access...</div>;
   }
 
-  if (!hasPermission(permission)) {
+  const allowed = Array.isArray(permission)
+    ? permission.some(hasPermission)
+    : hasPermission(permission);
+
+  if (!allowed) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -28,7 +28,7 @@ import { PublicServiceDetailPage } from "../features/services/pages/PublicServic
 import { PublicTherapistProfilesPage } from "../features/therapist-profiles/pages/PublicTherapistProfilesPage";
 import { PublicTherapistProfileDetailPage } from "../features/therapist-profiles/pages/PublicTherapistProfileDetailPage";
 import { SettingsPage } from "../features/settings/pages/SettingsPage";
-import { AppointmentsPage } from "../features/appointments/pages/AppointmentsPage";
+import { AppointmentsWorkspacePage } from "../features/appointments/pages/AppointmentsWorkspacePage";
 import { AvailabilityPage } from "../features/availability/pages/AvailabilityPage";
 import { BlogAdminPage } from "../features/blog/pages/BlogAdminPage";
 import { BookingHoldsPage } from "../features/booking-engine/pages/BookingHoldsPage";
@@ -95,7 +95,19 @@ export function App() {
       >
         <Route index element={<DashboardHomePage />} />
         <Route path="settings" element={<PermissionRoute permission="settings.read"><SettingsPage /></PermissionRoute>} />
-        <Route path="appointments" element={<PermissionRoute permission="appointments.read"><AppointmentsPage /></PermissionRoute>} />
+        <Route
+          path="appointments"
+          element={
+            <PermissionRoute
+              permission={[
+                "appointments.read",
+                "appointments.own.read",
+              ]}
+            >
+              <AppointmentsWorkspacePage />
+            </PermissionRoute>
+          }
+        />
         <Route path="availability" element={<PermissionRoute permission="availability.own.read"><AvailabilityPage /></PermissionRoute>} />
         <Route path="blog" element={<PermissionRoute permission="blog.read"><BlogAdminPage /></PermissionRoute>} />
         <Route path="booking-holds" element={<PermissionRoute permission="booking_engine.read"><BookingHoldsPage /></PermissionRoute>} />

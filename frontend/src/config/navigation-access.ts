@@ -10,7 +10,9 @@ export function filterNavigationSections(
       items: section.items.filter((item) => {
         const hasRequiredPermission =
           !item.permission ||
-          hasPermission(item.permission);
+          (Array.isArray(item.permission)
+            ? item.permission.some(hasPermission)
+            : hasPermission(item.permission));
 
         const hasExcludedPermission =
           Boolean(item.exclude_permission) &&
