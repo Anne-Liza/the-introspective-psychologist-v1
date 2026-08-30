@@ -38,6 +38,11 @@ export function TherapistProfilesPage() {
   );
 
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
+  const [profileFormOpen, setProfileFormOpen] = useState(false);
+  const [accountLinkOpen, setAccountLinkOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortOption, setSortOption] = useState("name-asc");
   const [fullName, setFullName] = useState("");
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
@@ -95,6 +100,7 @@ export function TherapistProfilesPage() {
 
   function resetForm() {
     setEditingProfileId(null);
+    setProfileFormOpen(false);
     setFullName("");
     setSlug("");
     setTitle("");
@@ -113,6 +119,7 @@ export function TherapistProfilesPage() {
 
   function loadProfileForEdit(profile: TherapistProfile) {
     setEditingProfileId(profile.id);
+    setProfileFormOpen(true);
     setFullName(profile.full_name);
     setSlug(profile.slug);
     setTitle(profile.title ?? "");
@@ -242,16 +249,253 @@ export function TherapistProfilesPage() {
   const showState = isLoading || isError || !data?.length;
   const formIsSaving = createMutation.isPending || updateMutation.isPending;
 
+  function workflowStatus(profile: TherapistProfile) {
+    if (pendingReviewFor(profile.id)) {
+      return "pending_review";
+    }
+
+    const publicationAction = publicationActionFor(profile.id);
+
+    if (
+      publicationAction &&
+      !publicationAction.revision.is_current_publication
+    ) {
+      return "awaiting_publication";
+    }
+
+    if (profile.review_status === "changes_requested") {
+      return "changes_requested";
+    }
+
+    if (profile.is_published) {
+      return "published";
+    }
+
+    return "not_published";
+  }
+
+  function workflowStatusLabel(profile: TherapistProfile) {
+    switch (workflowStatus(profile)) {
+      case "pending_review":
+        return "Pending review";
+      case "changes_requested":
+        return "Changes requested";
+      case "awaiting_publication":
+        return "Ready to publish";
+      case "published":
+        return "Published";
+      default:
+        return "Not published";
+    }
+  }
+
+  function workflowStatusBadgeClass(profile: TherapistProfile) {
+    switch (workflowStatus(profile)) {
+      case "pending_review":
+        return "bg-amber-50 text-amber-800 ring-amber-200";
+      case "changes_requested":
+        return "bg-rose-50 text-rose-800 ring-rose-200";
+      case "awaiting_publication":
+        return "bg-blue-50 text-blue-800 ring-blue-200";
+      case "published":
+        return "bg-emerald-50 text-emerald-800 ring-emerald-200";
+      default:
+        return "bg-slate-100 text-slate-700 ring-slate-200";
+    }
+  }
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredProfiles = [...(data ?? [])]
+    .filter((profile) => {
+      if (
+        statusFilter !== "all" &&
+        workflowStatus(profile) !== statusFilter
+      ) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchable = [
+        profile.full_name,
+        profile.title,
+        profile.specialties,
+        profile.approaches,
+        profile.location,
+        profile.languages,
+        profile.session_formats,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchable.includes(normalizedSearch);
+    })
+    .sort((a, b) => {
+      if (sortOption === "name-desc") {
+        return b.full_name.localeCompare(a.full_name);
+      }
+
+      if (sortOption === "display-order") {
+        return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+      }
+
+      if (sortOption === "status") {
+        const order: Record<string, number> = {
+          pending_review: 0,
+          changes_requested: 1,
+          awaiting_publication: 2,
+          not_published: 3,
+          published: 4,
+        };
+
+        return (
+          order[workflowStatus(a)] -
+          order[workflowStatus(b)]
+        );
+      }
+
+      return a.full_name.localeCompare(b.full_name);
+    });
+
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-medium text-slate-500">Therapy practice</p>
-        <h2 className="text-3xl font-bold">Therapist Profiles</h2>
-        <p className="mt-2 text-slate-600">
-          Create therapist profiles, manage profile settings, review content changes, and control publication.
-        </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-sm font-medium text-slate-500">
+            Therapy practice
+          </p>
+          <h2 className="text-3xl font-bold">
+            Therapist Profiles
+          </h2>
+          <p className="mt-2 max-w-2xl text-slate-600">
+            Review therapist submissions, manage publication,
+            and keep the practice roster current.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            onClick={() => {
+              resetForm();
+              setProfileFormOpen(true);
+              setAccountLinkOpen(false);
+            }}
+          >
+            + Add therapist manually
+          </Button>
+
+          {canManageAccounts ? (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setAccountLinkOpen((current) => !current);
+                setProfileFormOpen(false);
+              }}
+            >
+              Link account manually
+            </Button>
+          ) : null}
+        </div>
       </div>
 
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+              Attention needed
+            </p>
+            <h3 className="mt-1 text-xl font-semibold">
+              Profile workflow
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap gap-2 text-sm">
+            <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-900">
+              {reviewQueue.length} awaiting review
+            </span>
+
+            <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-900">
+              {
+                publicationQueue.filter(
+                  (item) => !item.revision.is_current_publication,
+                ).length
+              } awaiting publication
+            </span>
+          </div>
+        </div>
+
+        {reviewQueue.length === 0 &&
+        publicationQueue.filter(
+          (item) => !item.revision.is_current_publication,
+        ).length === 0 ? (
+          <p className="mt-5 text-sm text-slate-500">
+            No therapist profile actions currently need attention.
+          </p>
+        ) : (
+          <div className="mt-5 grid gap-3">
+            {reviewQueue.map((item) => (
+              <div
+                key={item.revision.id}
+                className="flex flex-col gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="font-semibold">
+                    {item.revision.full_name}
+                  </div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {item.revision.title || "Therapist"} · Awaiting review
+                  </div>
+                </div>
+
+                <Link
+                  to={`/dashboard/therapist-profiles/reviews/${item.revision.id}`}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#34422f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#253223]"
+                >
+                  Review submission
+                </Link>
+              </div>
+            ))}
+
+            {publicationQueue
+              .filter(
+                (item) => !item.revision.is_current_publication,
+              )
+              .map((item) => (
+                <div
+                  key={item.revision.id}
+                  className="flex flex-col gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <div className="font-semibold">
+                      {item.revision.full_name}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-600">
+                      {item.revision.title || "Therapist"} · Approved and ready to publish
+                    </div>
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      publishMutation.mutate(item.revision.id)
+                    }
+                    disabled={publishMutation.isPending}
+                  >
+                    Publish profile
+                  </Button>
+                </div>
+              ))}
+          </div>
+        )}
+      </section>
+
+      {profileFormOpen ? (
       <form onSubmit={handleSubmit} className="rounded-2xl border bg-white p-6 shadow-sm">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -381,11 +625,93 @@ export function TherapistProfilesPage() {
           <p className="mt-3 text-sm text-red-600">Therapist profile save failed. Check required fields and try again.</p>
         ) : null}
       </form>
+      ) : null}
 
-      <TherapistAccountLinkPanel
-        profiles={data ?? []}
-        canManage={canManageAccounts}
-      />
+      {accountLinkOpen ? (
+        <TherapistAccountLinkPanel
+          profiles={data ?? []}
+          canManage={canManageAccounts}
+        />
+      ) : null}
+
+      <section>
+        <div className="mb-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">
+            Therapist roster
+          </p>
+          <h3 className="mt-1 text-xl font-semibold">
+            Therapists
+          </h3>
+        </div>
+
+        <div className="mb-4 grid gap-3 rounded-2xl border bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px_220px]">
+          <div>
+            <label
+              htmlFor="therapist-search"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Search
+            </label>
+            <input
+              id="therapist-search"
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search name, specialty, approach, location..."
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="therapist-status-filter"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Status
+            </label>
+            <select
+              id="therapist-status-filter"
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            >
+              <option value="all">All statuses</option>
+              <option value="pending_review">Pending review</option>
+              <option value="changes_requested">Changes requested</option>
+              <option value="awaiting_publication">
+                Awaiting publication
+              </option>
+              <option value="published">Published</option>
+              <option value="not_published">Not published</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="therapist-sort"
+              className="mb-2 block text-sm font-medium text-slate-700"
+            >
+              Sort
+            </label>
+            <select
+              id="therapist-sort"
+              value={sortOption}
+              onChange={(event) => setSortOption(event.target.value)}
+              className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-900 focus:ring-2 focus:ring-slate-200"
+            >
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="status">Workflow status</option>
+              <option value="display-order">Display order</option>
+            </select>
+          </div>
+        </div>
+
+        {!showState ? (
+          <p className="mb-3 text-sm text-slate-500">
+            Showing {filteredProfiles.length} of {data?.length ?? 0} therapists
+          </p>
+        ) : null}
 
       {showState ? (
         <DataState isLoading={isLoading} isError={isError} empty={!data?.length} />
@@ -401,8 +727,22 @@ export function TherapistProfilesPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.map((profile) => (
-                <tr key={profile.id} className="border-t align-top">
+              {filteredProfiles.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="p-8 text-center text-sm text-slate-500"
+                  >
+                    No therapists match the current search or filters.
+                  </td>
+                </tr>
+              ) : null}
+
+              {filteredProfiles.map((profile) => (
+                <tr
+                  key={profile.id}
+                  className="border-t align-top transition-colors hover:bg-slate-50/70"
+                >
                   <td className="p-4">
                     <div className="font-medium">{profile.full_name}</div>
                     <div className="text-slate-500">/{profile.slug}</div>
@@ -415,29 +755,25 @@ export function TherapistProfilesPage() {
                     <div className="text-slate-500">{profile.session_formats || ""}</div>
                   </td>
                   <td className="p-4">
-                    <div>
-                      {pendingReviewFor(profile.id)
-                        ? "Pending review"
-                        : publicationActionFor(profile.id) &&
-                            !publicationActionFor(profile.id)!
-                              .revision.is_current_publication
-                          ? "Approved — awaiting publication"
-                          : profile.is_published
-                            ? "Published"
-                            : "Not published"}
-                    </div>
+                    <span
+                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${workflowStatusBadgeClass(
+                        profile,
+                      )}`}
+                    >
+                      {workflowStatusLabel(profile)}
+                    </span>
 
                     {publicationActionFor(profile.id) ? (
-                      <div className="mt-1 text-slate-500">
+                      <div className="mt-2 max-w-xs text-sm text-slate-500">
                         {publicationActionFor(profile.id)!
                           .revision.is_current_publication
-                          ? "Current version is hidden"
-                          : "Approved update ready to publish"}
+                          ? "Current published version is hidden."
+                          : "Approved update is ready for publication."}
                       </div>
                     ) : null}
 
-                    <div className="text-slate-500">
-                      Order: {profile.sort_order}
+                    <div className="mt-2 text-xs text-slate-400">
+                      Display order {profile.sort_order}
                     </div>
                   </td>
                   <td className="p-4">
@@ -455,9 +791,10 @@ export function TherapistProfilesPage() {
 
                       <Button
                         type="button"
+                        variant="secondary"
                         onClick={() => loadProfileForEdit(profile)}
                       >
-                        Edit settings
+                        Edit profile
                       </Button>
 
                       {canReviewProfiles &&
@@ -465,12 +802,13 @@ export function TherapistProfilesPage() {
                       !publicationActionFor(profile.id) ? (
                         <Button
                           type="button"
+                          variant="secondary"
                           onClick={() =>
                             startRevisionMutation.mutate(profile.id)
                           }
                           disabled={startRevisionMutation.isPending}
                         >
-                          Start content revision
+                          Create revision
                         </Button>
                       ) : null}
 
@@ -487,8 +825,8 @@ export function TherapistProfilesPage() {
                         >
                           {publicationActionFor(profile.id)!
                             .revision.is_current_publication
-                            ? "Republish"
-                            : "Publish approved version"}
+                            ? "Republish profile"
+                            : "Publish approved update"}
                         </Button>
                       ) : null}
 
@@ -521,6 +859,7 @@ export function TherapistProfilesPage() {
           </table>
         </div>
       )}
+      </section>
     </div>
   );
 }

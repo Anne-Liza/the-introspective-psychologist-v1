@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import {
   BookOpenText,
@@ -40,6 +41,10 @@ import {
 } from "../../config/navigation";
 import { filterNavigationSections } from "../../config/navigation-access";
 import { useAuth } from "../../features/auth/context/AuthContext";
+import {
+  fetchTherapistProfilePublicationQueue,
+  fetchTherapistProfileReviewQueue,
+} from "../../features/therapist-profiles/lib/therapistProfilesApi";
 
 const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -87,6 +92,36 @@ function NavigationLinks({
 }) {
   const location = useLocation();
   const { hasPermission } = useAuth();
+
+  const canReviewProfiles = hasPermission(
+    "therapist_profiles.review",
+  );
+  const canPublishProfiles = hasPermission(
+    "therapist_profiles.publish",
+  );
+
+  const {
+    data: therapistProfileReviewQueue = [],
+  } = useQuery({
+    queryKey: ["therapist-profile-review-queue"],
+    queryFn: fetchTherapistProfileReviewQueue,
+    enabled: canReviewProfiles,
+  });
+
+  const {
+    data: therapistProfilePublicationQueue = [],
+  } = useQuery({
+    queryKey: ["therapist-profile-publication-queue"],
+    queryFn: fetchTherapistProfilePublicationQueue,
+    enabled: canPublishProfiles,
+  });
+
+  const therapistProfilePendingCount =
+    therapistProfileReviewQueue.length +
+    therapistProfilePublicationQueue.filter(
+      (item) => !item.revision.is_current_publication,
+    ).length;
+
   const [collapsedSections, setCollapsedSections] =
     useState<Record<string, boolean>>({});
 
@@ -155,7 +190,25 @@ function NavigationLinks({
                         className="h-[1.05rem] w-[1.05rem] shrink-0"
                         strokeWidth={1.8}
                       />
-                      <span>{item.label}</span>
+                      <span className="min-w-0 flex-1">
+                        {item.label}
+                      </span>
+
+                      {item.href === "/dashboard/therapist-profiles" &&
+                      therapistProfilePendingCount > 0 ? (
+                        <span
+                          aria-label={`${therapistProfilePendingCount} therapist profile actions need attention`}
+                          className={
+                            active
+                              ? "inline-flex min-w-6 items-center justify-center rounded-full bg-[#34422f] px-1.5 py-0.5 text-[0.68rem] font-bold tabular-nums text-white"
+                              : "inline-flex min-w-6 items-center justify-center rounded-full bg-[#d9ded3] px-1.5 py-0.5 text-[0.68rem] font-bold tabular-nums text-[#253026]"
+                          }
+                        >
+                          {therapistProfilePendingCount > 99
+                            ? "99+"
+                            : therapistProfilePendingCount}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

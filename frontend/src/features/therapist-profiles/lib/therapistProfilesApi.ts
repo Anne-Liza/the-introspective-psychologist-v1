@@ -19,6 +19,11 @@ export type TherapistProfile = {
   booking_cta_url: string | null;
   sort_order: number;
   is_published: boolean;
+  review_status?:
+    | "draft"
+    | "pending_review"
+    | "changes_requested"
+    | "approved";
 };
 
 
