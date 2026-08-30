@@ -938,6 +938,31 @@ def delete_scheduled_appointment(
         raise
 
 
+def _service_slot_duration_minutes(
+    db: Session,
+    service_id: str | None,
+) -> int | None:
+    if service_id is None:
+        return None
+
+    service = db.get(
+        Service,
+        service_id,
+    )
+
+    if (
+        service is None
+        or service.duration_minutes is None
+    ):
+        return None
+
+    duration = int(
+        service.duration_minutes
+    )
+
+    return duration if duration > 0 else None
+
+
 def list_bookable_slots(
     db: Session,
     *,
@@ -950,6 +975,13 @@ def list_bookable_slots(
 ) -> list[BookableSlotRead]:
     if manage_expiry:
         expire_stale_holds(db)
+
+    service_duration_minutes = (
+        _service_slot_duration_minutes(
+            db,
+            service_id,
+        )
+    )
 
     rules = db.scalars(
         select(AvailabilityRule)
@@ -993,10 +1025,22 @@ def list_bookable_slots(
         if not _matches_text_filter(rule.location, location):
             continue
 
+        slot_duration_minutes = (
+            service_duration_minutes
+            or rule.slot_duration_minutes
+        )
+
         slot_start = rule.start_time
-        step_minutes = rule.slot_duration_minutes + rule.buffer_minutes
+        step_minutes = (
+            slot_duration_minutes
+            + rule.buffer_minutes
+        )
+
         while True:
-            slot_end = add_minutes(slot_start, rule.slot_duration_minutes)
+            slot_end = add_minutes(
+                slot_start,
+                slot_duration_minutes,
+            )
             if slot_end > rule.end_time or slot_end <= slot_start:
                 break
             blocked = (
