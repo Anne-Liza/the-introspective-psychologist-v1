@@ -1,3 +1,6 @@
+import re
+import unicodedata
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -6,8 +9,40 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.time import utc_now
 from app.modules.auth.dependencies import require_permission
-from app.modules.blog.models import BlogPost
-from app.modules.blog.schemas import BlogPostCreate, BlogPostRead, BlogPostUpdate
+from app.modules.blog.models import (
+    BlogPost,
+    BlogPostRevision,
+    BlogReviewEvent,
+)
+from app.modules.blog.schemas import (
+    BlogAdminReviewRead,
+    BlogDraftContent,
+    BlogDraftCreate,
+    BlogDraftUpdate,
+    BlogPostCreate,
+    BlogPostRead,
+    BlogPostUpdate,
+    BlogReviewEventRead,
+    BlogReviewRequest,
+    BlogRevisionRead,
+    BlogWorkflowPostRead,
+)
+from app.modules.blog.service import (
+    REVIEW_APPROVED,
+    REVIEW_CHANGES_REQUESTED,
+    REVIEW_DRAFT,
+    REVIEW_PENDING,
+    REVIEW_REJECTED,
+    REVISION_CONTENT_FIELDS,
+    build_revision_from_post,
+    publish_blog_revision,
+    record_blog_event,
+    review_blog_revision,
+    submit_blog_revision,
+)
+from app.modules.therapist_profiles.models import (
+    TherapistProfile,
+)
 from app.modules.users.models import User
 
 router = APIRouter()
@@ -114,3 +149,1109 @@ def delete_blog_post(
     db.delete(post)
     db.commit()
     return None
+
+
+# ---------------------------------------------------------------------------
+# Editorial workflow
+# ---------------------------------------------------------------------------
+
+
+def _slugify_blog_title(
+    value: str,
+) -> str:
+    normalized = unicodedata.normalize(
+        "NFKD",
+        value,
+    )
+    ascii_value = (
+        normalized
+        .encode("ascii", "ignore")
+        .decode("ascii")
+    )
+
+    slug = re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        ascii_value.lower(),
+    ).strip("-")
+
+    return slug[:160] or "article"
+
+
+def _allocate_blog_slug(
+    db: Session,
+    *,
+    title: str,
+) -> str:
+    base = _slugify_blog_title(title)
+    candidate = base
+    suffix = 2
+
+    while (
+        db.scalar(
+            select(BlogPost.id).where(
+                BlogPost.slug == candidate
+            )
+        )
+        is not None
+    ):
+        suffix_text = f"-{suffix}"
+        candidate = (
+            f"{base[:160 - len(suffix_text)]}"
+            f"{suffix_text}"
+        )
+        suffix += 1
+
+    return candidate
+
+
+def _current_therapist_profile(
+    db: Session,
+    current_user: User,
+) -> TherapistProfile:
+    profile = db.scalar(
+        select(TherapistProfile).where(
+            TherapistProfile.user_id
+            == current_user.id
+        )
+    )
+
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "No therapist profile is linked "
+                "to this account."
+            ),
+        )
+
+    return profile
+
+
+def _latest_blog_revision(
+    db: Session,
+    *,
+    post_id: str,
+) -> BlogPostRevision | None:
+    return db.scalar(
+        select(BlogPostRevision)
+        .where(
+            BlogPostRevision.blog_post_id
+            == post_id
+        )
+        .order_by(
+            BlogPostRevision
+            .version_number
+            .desc()
+        )
+        .limit(1)
+    )
+
+
+def _current_blog_publication(
+    db: Session,
+    *,
+    post_id: str,
+) -> BlogPostRevision | None:
+    return db.scalar(
+        select(BlogPostRevision)
+        .where(
+            BlogPostRevision.blog_post_id
+            == post_id,
+            BlogPostRevision
+            .is_current_publication
+            .is_(True),
+        )
+        .order_by(
+            BlogPostRevision
+            .version_number
+            .desc()
+        )
+        .limit(1)
+    )
+
+
+def _working_blog_revision(
+    db: Session,
+    *,
+    post_id: str,
+) -> BlogPostRevision | None:
+    return db.scalar(
+        select(BlogPostRevision)
+        .where(
+            BlogPostRevision.blog_post_id
+            == post_id,
+            BlogPostRevision
+            .is_current_publication
+            .is_(False),
+        )
+        .order_by(
+            BlogPostRevision
+            .version_number
+            .desc()
+        )
+        .limit(1)
+    )
+
+
+def _current_blog_publications(
+    db: Session,
+    *,
+    post_id: str,
+) -> list[BlogPostRevision]:
+    return list(
+        db.scalars(
+            select(BlogPostRevision)
+            .where(
+                BlogPostRevision.blog_post_id
+                == post_id,
+                BlogPostRevision
+                .is_current_publication
+                .is_(True),
+            )
+        ).all()
+    )
+
+
+def _blog_history(
+    db: Session,
+    *,
+    post_id: str,
+) -> list[BlogReviewEvent]:
+    return list(
+        db.scalars(
+            select(BlogReviewEvent)
+            .where(
+                BlogReviewEvent.blog_post_id
+                == post_id
+            )
+            .order_by(
+                BlogReviewEvent.created_at,
+                BlogReviewEvent.id,
+            )
+        ).all()
+    )
+
+
+def _workflow_post_response(
+    db: Session,
+    post: BlogPost,
+) -> BlogWorkflowPostRead:
+    working = _working_blog_revision(
+        db,
+        post_id=post.id,
+    )
+    current = _current_blog_publication(
+        db,
+        post_id=post.id,
+    )
+
+    return BlogWorkflowPostRead(
+        id=post.id,
+        slug=post.slug,
+        owner_user_id=post.owner_user_id,
+        therapist_profile_id=(
+            post.therapist_profile_id
+        ),
+        status=post.status,
+        published_at=post.published_at,
+        title=post.title,
+        author_name=post.author_name,
+        content_type=post.content_type,
+        created_at=post.created_at,
+        updated_at=post.updated_at,
+        working_revision=(
+            BlogRevisionRead
+            .model_validate(working)
+            if working is not None
+            else None
+        ),
+        current_publication=(
+            BlogRevisionRead
+            .model_validate(current)
+            if current is not None
+            else None
+        ),
+    )
+
+
+def _owned_blog_post(
+    db: Session,
+    *,
+    post_id: str,
+    current_user: User,
+) -> BlogPost:
+    post = db.scalar(
+        select(BlogPost).where(
+            BlogPost.id == post_id,
+            BlogPost.owner_user_id
+            == current_user.id,
+        )
+    )
+
+    if post is None:
+        # Deliberately return 404 rather than revealing
+        # whether another provider owns this article.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article not found.",
+        )
+
+    return post
+
+
+def _editable_owned_blog_revision(
+    db: Session,
+    *,
+    post: BlogPost,
+    current_user: User,
+) -> BlogPostRevision:
+    latest = _latest_blog_revision(
+        db,
+        post_id=post.id,
+    )
+
+    if latest is None:
+        revision = build_revision_from_post(
+            post,
+            version_number=1,
+            created_by_user_id=(
+                current_user.id
+            ),
+        )
+        db.add(revision)
+        return revision
+
+    if latest.is_current_publication:
+        revision = build_revision_from_post(
+            post,
+            version_number=(
+                latest.version_number + 1
+            ),
+            created_by_user_id=(
+                current_user.id
+            ),
+        )
+        db.add(revision)
+        return revision
+
+    if latest.review_status in {
+        REVIEW_DRAFT,
+        REVIEW_CHANGES_REQUESTED,
+    }:
+        return latest
+
+    if (
+        latest.review_status
+        == REVIEW_PENDING
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article is currently "
+                "in review and cannot be edited."
+            ),
+        )
+
+    if (
+        latest.review_status
+        == REVIEW_APPROVED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article is approved "
+                "and awaiting publication."
+            ),
+        )
+
+    if (
+        latest.review_status
+        == REVIEW_REJECTED
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article was rejected. "
+                "Its review record is final."
+            ),
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "This article cannot currently "
+            "be edited."
+        ),
+    )
+
+
+def _validate_revision_content(
+    revision: BlogPostRevision,
+) -> None:
+    values = {
+        field: getattr(revision, field)
+        for field in REVISION_CONTENT_FIELDS
+    }
+
+    validated = (
+        BlogDraftContent.model_validate(
+            values
+        )
+    )
+
+    for field, value in (
+        validated
+        .model_dump()
+        .items()
+    ):
+        setattr(
+            revision,
+            field,
+            value,
+        )
+
+
+def _admin_review_revision(
+    db: Session,
+    *,
+    revision_id: str,
+    require_pending: bool = False,
+) -> BlogPostRevision:
+    revision = db.scalar(
+        select(BlogPostRevision).where(
+            BlogPostRevision.id
+            == revision_id
+        )
+    )
+
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Article revision not found."
+            ),
+        )
+
+    if revision.is_current_publication:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The current published revision "
+                "is not part of the review queue."
+            ),
+        )
+
+    if require_pending:
+        if (
+            revision.review_status
+            != REVIEW_PENDING
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "Only pending-review "
+                    "article revisions can "
+                    "be reviewed."
+                ),
+            )
+    elif revision.review_status not in {
+        REVIEW_PENDING,
+        REVIEW_CHANGES_REQUESTED,
+        REVIEW_APPROVED,
+        REVIEW_REJECTED,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article revision has "
+                "not entered the editorial "
+                "review workflow."
+            ),
+        )
+
+    return revision
+
+
+def _admin_review_response(
+    db: Session,
+    revision: BlogPostRevision,
+) -> BlogAdminReviewRead:
+    post = db.scalar(
+        select(BlogPost).where(
+            BlogPost.id
+            == revision.blog_post_id
+        )
+    )
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article not found.",
+        )
+
+    return BlogAdminReviewRead(
+        post=_workflow_post_response(
+            db,
+            post,
+        ),
+        revision=(
+            BlogRevisionRead
+            .model_validate(revision)
+        ),
+        history=[
+            BlogReviewEventRead
+            .model_validate(event)
+            for event in _blog_history(
+                db,
+                post_id=post.id,
+            )
+        ],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Therapist: My Articles
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/mine",
+    response_model=list[
+        BlogWorkflowPostRead
+    ],
+)
+def list_my_blog_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.read"
+        )
+    ),
+):
+    posts = db.scalars(
+        select(BlogPost)
+        .where(
+            BlogPost.owner_user_id
+            == current_user.id
+        )
+        .order_by(
+            BlogPost.updated_at.desc(),
+            BlogPost.created_at.desc(),
+        )
+    ).all()
+
+    return [
+        _workflow_post_response(
+            db,
+            post,
+        )
+        for post in posts
+    ]
+
+
+@router.post(
+    "/mine",
+    response_model=BlogWorkflowPostRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_my_blog_post(
+    payload: BlogDraftCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.create"
+        )
+    ),
+):
+    profile = _current_therapist_profile(
+        db,
+        current_user,
+    )
+
+    content = payload.model_dump()
+
+    # Provider authorship is derived from the
+    # authenticated therapist profile rather
+    # than trusted from browser input.
+    content["author_name"] = (
+        profile.full_name
+    )
+
+    # Featuring is an editorial/publication
+    # decision controlled by the practice.
+    content["is_featured"] = False
+
+    post = BlogPost(
+        slug=_allocate_blog_slug(
+            db,
+            title=content["title"],
+        ),
+        owner_user_id=current_user.id,
+        therapist_profile_id=profile.id,
+        created_by_user_id=(
+            current_user.id
+        ),
+        status="draft",
+        published_at=None,
+        published_by_user_id=None,
+        **content,
+    )
+
+    db.add(post)
+
+    try:
+        db.flush()
+
+        revision = (
+            build_revision_from_post(
+                post,
+                version_number=1,
+                created_by_user_id=(
+                    current_user.id
+                ),
+            )
+        )
+        db.add(revision)
+        db.flush()
+
+        db.add(
+            record_blog_event(
+                post=post,
+                revision=revision,
+                actor_user_id=(
+                    current_user.id
+                ),
+                action="created",
+            )
+        )
+
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "The article could not be "
+                "created because its public "
+                "identity conflicts with an "
+                "existing article."
+            ),
+        ) from exc
+
+    db.refresh(post)
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.get(
+    "/mine/{post_id}",
+    response_model=BlogWorkflowPostRead,
+)
+def get_my_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.read"
+        )
+    ),
+):
+    post = _owned_blog_post(
+        db,
+        post_id=post_id,
+        current_user=current_user,
+    )
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.get(
+    "/mine/{post_id}/history",
+    response_model=list[
+        BlogReviewEventRead
+    ],
+)
+def get_my_blog_history(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.read"
+        )
+    ),
+):
+    post = _owned_blog_post(
+        db,
+        post_id=post_id,
+        current_user=current_user,
+    )
+
+    return [
+        BlogReviewEventRead
+        .model_validate(event)
+        for event in _blog_history(
+            db,
+            post_id=post.id,
+        )
+    ]
+
+
+@router.patch(
+    "/mine/{post_id}",
+    response_model=BlogWorkflowPostRead,
+)
+def update_my_blog_post(
+    post_id: str,
+    payload: BlogDraftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.update"
+        )
+    ),
+):
+    post = _owned_blog_post(
+        db,
+        post_id=post_id,
+        current_user=current_user,
+    )
+
+    profile = _current_therapist_profile(
+        db,
+        current_user,
+    )
+
+    revision = (
+        _editable_owned_blog_revision(
+            db,
+            post=post,
+            current_user=current_user,
+        )
+    )
+
+    values = payload.model_dump(
+        exclude_unset=True,
+    )
+
+    # Authenticated therapist identity remains
+    # the canonical byline in own workflows.
+    values.pop(
+        "author_name",
+        None,
+    )
+
+    for key, value in values.items():
+        setattr(
+            revision,
+            key,
+            value,
+        )
+
+    revision.author_name = (
+        profile.full_name
+    )
+    revision.is_featured = False
+    revision.updated_by_user_id = (
+        current_user.id
+    )
+
+    try:
+        _validate_revision_content(
+            revision
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=str(exc),
+        ) from exc
+
+    db.add(revision)
+    db.commit()
+    db.refresh(post)
+    db.refresh(revision)
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.post(
+    "/mine/{post_id}/submit",
+    response_model=BlogWorkflowPostRead,
+)
+def submit_my_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.own.submit"
+        )
+    ),
+):
+    post = _owned_blog_post(
+        db,
+        post_id=post_id,
+        current_user=current_user,
+    )
+
+    revision = (
+        _working_blog_revision(
+            db,
+            post_id=post.id,
+        )
+    )
+
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "There is no working article "
+                "draft to submit."
+            ),
+        )
+
+    try:
+        _validate_revision_content(
+            revision
+        )
+        submit_blog_revision(
+            revision
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    revision.updated_by_user_id = (
+        current_user.id
+    )
+
+    db.add(revision)
+    db.add(
+        record_blog_event(
+            post=post,
+            revision=revision,
+            actor_user_id=(
+                current_user.id
+            ),
+            action="submitted",
+        )
+    )
+
+    db.commit()
+    db.refresh(post)
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Practice Admin: editorial review
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/review-queue",
+    response_model=list[
+        BlogAdminReviewRead
+    ],
+)
+def list_blog_review_queue(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.review"
+        )
+    ),
+):
+    revisions = db.scalars(
+        select(BlogPostRevision)
+        .where(
+            BlogPostRevision.review_status
+            == REVIEW_PENDING,
+            BlogPostRevision
+            .is_current_publication
+            .is_(False),
+        )
+        .order_by(
+            BlogPostRevision
+            .submitted_at
+            .asc(),
+            BlogPostRevision
+            .created_at
+            .asc(),
+        )
+    ).all()
+
+    return [
+        _admin_review_response(
+            db,
+            revision,
+        )
+        for revision in revisions
+    ]
+
+
+@router.get(
+    "/revisions/{revision_id}",
+    response_model=BlogAdminReviewRead,
+)
+def get_blog_revision_for_review(
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.review"
+        )
+    ),
+):
+    revision = (
+        _admin_review_revision(
+            db,
+            revision_id=revision_id,
+        )
+    )
+
+    return _admin_review_response(
+        db,
+        revision,
+    )
+
+
+@router.post(
+    "/revisions/{revision_id}/review",
+    response_model=BlogAdminReviewRead,
+)
+def review_blog_post_revision(
+    revision_id: str,
+    payload: BlogReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.review"
+        )
+    ),
+):
+    revision = (
+        _admin_review_revision(
+            db,
+            revision_id=revision_id,
+            require_pending=True,
+        )
+    )
+
+    post = db.scalar(
+        select(BlogPost).where(
+            BlogPost.id
+            == revision.blog_post_id
+        )
+    )
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article not found.",
+        )
+
+    try:
+        review_blog_revision(
+            revision,
+            decision=payload.decision,
+            reviewer_user_id=(
+                current_user.id
+            ),
+            notes=payload.notes,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=str(exc),
+        ) from exc
+
+    db.add(revision)
+    db.add(
+        record_blog_event(
+            post=post,
+            revision=revision,
+            actor_user_id=(
+                current_user.id
+            ),
+            action=payload.decision,
+            note=payload.notes,
+        )
+    )
+
+    db.commit()
+    db.refresh(revision)
+
+    return _admin_review_response(
+        db,
+        revision,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Practice Admin: publication
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/publication-queue",
+    response_model=list[
+        BlogAdminReviewRead
+    ],
+)
+def list_blog_publication_queue(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.publish"
+        )
+    ),
+):
+    revisions = db.scalars(
+        select(BlogPostRevision)
+        .where(
+            BlogPostRevision.review_status
+            == REVIEW_APPROVED,
+            BlogPostRevision
+            .is_current_publication
+            .is_(False),
+        )
+        .order_by(
+            BlogPostRevision
+            .reviewed_at
+            .asc(),
+            BlogPostRevision
+            .created_at
+            .asc(),
+        )
+    ).all()
+
+    return [
+        _admin_review_response(
+            db,
+            revision,
+        )
+        for revision in revisions
+    ]
+
+
+@router.post(
+    "/revisions/{revision_id}/publish",
+    response_model=BlogAdminReviewRead,
+)
+def publish_blog_post_revision(
+    revision_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission(
+            "blog.publish"
+        )
+    ),
+):
+    revision = db.scalar(
+        select(BlogPostRevision).where(
+            BlogPostRevision.id
+            == revision_id
+        )
+    )
+
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "Article revision not found."
+            ),
+        )
+
+    post = db.scalar(
+        select(BlogPost).where(
+            BlogPost.id
+            == revision.blog_post_id
+        )
+    )
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article not found.",
+        )
+
+    previous_publications = (
+        _current_blog_publications(
+            db,
+            post_id=post.id,
+        )
+    )
+
+    try:
+        publish_blog_revision(
+            post,
+            revision,
+            publisher_user_id=(
+                current_user.id
+            ),
+            previous_publications=(
+                previous_publications
+            ),
+        )
+
+        db.add(
+            record_blog_event(
+                post=post,
+                revision=revision,
+                actor_user_id=(
+                    current_user.id
+                ),
+                action="published",
+            )
+        )
+
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=str(exc),
+        ) from exc
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "The approved article "
+                "could not be published."
+            ),
+        ) from exc
+
+    db.refresh(post)
+    db.refresh(revision)
+
+    return _admin_review_response(
+        db,
+        revision,
+    )

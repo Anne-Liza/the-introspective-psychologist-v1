@@ -161,3 +161,468 @@ class BlogPostRead(BlogPostBase):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+BLOG_CONTENT_TYPE = Literal[
+    "article",
+    "editorial",
+    "external_coverage",
+    "external_article",
+    "licensed_republication",
+]
+
+BLOG_MEDIA_TYPE = Literal[
+    "none",
+    "image",
+    "video",
+]
+
+BLOG_REVIEW_STATUS = Literal[
+    "draft",
+    "pending_review",
+    "changes_requested",
+    "approved",
+    "rejected",
+]
+
+BLOG_REVIEW_DECISION = Literal[
+    "changes_requested",
+    "approved",
+    "rejected",
+]
+
+
+class BlogDraftContent(BaseModel):
+    model_config = {
+        "extra": "forbid",
+    }
+
+    title: str = Field(
+        min_length=1,
+        max_length=220,
+    )
+    excerpt: str | None = Field(
+        default=None,
+        max_length=600,
+    )
+    body_markdown: str = Field(
+        min_length=1,
+        max_length=100_000,
+    )
+
+    category: str | None = Field(
+        default=None,
+        max_length=120,
+    )
+    tags: list[str] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    author_name: str | None = Field(
+        default=None,
+        max_length=180,
+    )
+
+    content_type: BLOG_CONTENT_TYPE = "article"
+
+    external_url: str | None = None
+    source_name: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    source_author: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    source_published_at: datetime | None = None
+
+    featured_media_type: BLOG_MEDIA_TYPE = "none"
+
+    cover_image_url: str | None = None
+    cover_image_alt: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    video_url: str | None = None
+    media_caption: str | None = None
+    media_credit: str | None = Field(
+        default=None,
+        max_length=300,
+    )
+
+    is_featured: bool = False
+
+    seo_title: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    seo_description: str | None = Field(
+        default=None,
+        max_length=320,
+    )
+
+    @field_validator(
+        "title",
+        "body_markdown",
+    )
+    @classmethod
+    def trim_blog_required_text(
+        cls,
+        value: str,
+    ) -> str:
+        normalized = value.strip()
+
+        if not normalized:
+            raise ValueError(
+                "Value cannot be blank."
+            )
+
+        return normalized
+
+    @field_validator(
+        "excerpt",
+        "category",
+        "author_name",
+        "source_name",
+        "source_author",
+        "cover_image_alt",
+        "media_caption",
+        "media_credit",
+        "seo_title",
+        "seo_description",
+    )
+    @classmethod
+    def trim_blog_optional_text(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        return clean_optional_text(value)
+
+    @field_validator(
+        "cover_image_url",
+        "external_url",
+        "video_url",
+    )
+    @classmethod
+    def validate_blog_url(
+        cls,
+        value: str | None,
+        info,
+    ) -> str | None:
+        return validate_public_url_or_path(
+            value,
+            field_name=info.field_name,
+        )
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_blog_tags(
+        cls,
+        value: list[str],
+    ) -> list[str]:
+        return BlogPostBase.normalize_tags(value)
+
+    @model_validator(mode="after")
+    def validate_blog_content_type(self):
+        external_types = {
+            "external_coverage",
+            "external_article",
+        }
+
+        if (
+            self.content_type in external_types
+            and not self.external_url
+        ):
+            raise ValueError(
+                "external_url is required for "
+                "external coverage or external articles."
+            )
+
+        if (
+            self.content_type
+            in {
+                "external_coverage",
+                "external_article",
+                "licensed_republication",
+            }
+            and not self.source_name
+        ):
+            raise ValueError(
+                "source_name is required for "
+                "externally sourced content."
+            )
+
+        if self.featured_media_type == "image":
+            if not self.cover_image_url:
+                raise ValueError(
+                    "cover_image_url is required "
+                    "for image media."
+                )
+
+            if not self.cover_image_alt:
+                raise ValueError(
+                    "cover_image_alt is required "
+                    "for image media."
+                )
+
+        if (
+            self.featured_media_type == "video"
+            and not self.video_url
+        ):
+            raise ValueError(
+                "video_url is required "
+                "for video media."
+            )
+
+        return self
+
+
+class BlogDraftCreate(
+    BlogDraftContent,
+):
+    pass
+
+
+class BlogDraftUpdate(BaseModel):
+    model_config = {
+        "extra": "forbid",
+    }
+
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=220,
+    )
+    excerpt: str | None = Field(
+        default=None,
+        max_length=600,
+    )
+    body_markdown: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100_000,
+    )
+
+    category: str | None = Field(
+        default=None,
+        max_length=120,
+    )
+    tags: list[str] | None = Field(
+        default=None,
+        max_length=20,
+    )
+    author_name: str | None = Field(
+        default=None,
+        max_length=180,
+    )
+
+    content_type: BLOG_CONTENT_TYPE | None = None
+
+    external_url: str | None = None
+    source_name: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    source_author: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    source_published_at: datetime | None = None
+
+    featured_media_type: BLOG_MEDIA_TYPE | None = None
+
+    cover_image_url: str | None = None
+    cover_image_alt: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    video_url: str | None = None
+    media_caption: str | None = None
+    media_credit: str | None = Field(
+        default=None,
+        max_length=300,
+    )
+
+    is_featured: bool | None = None
+
+    seo_title: str | None = Field(
+        default=None,
+        max_length=220,
+    )
+    seo_description: str | None = Field(
+        default=None,
+        max_length=320,
+    )
+
+    @field_validator(
+        "title",
+        "body_markdown",
+    )
+    @classmethod
+    def trim_blog_required_update(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        if value is None:
+            return None
+
+        normalized = value.strip()
+
+        if not normalized:
+            raise ValueError(
+                "Value cannot be blank."
+            )
+
+        return normalized
+
+    @field_validator(
+        "excerpt",
+        "category",
+        "author_name",
+        "source_name",
+        "source_author",
+        "cover_image_alt",
+        "media_caption",
+        "media_credit",
+        "seo_title",
+        "seo_description",
+    )
+    @classmethod
+    def trim_blog_optional_update(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        return clean_optional_text(value)
+
+    @field_validator(
+        "cover_image_url",
+        "external_url",
+        "video_url",
+    )
+    @classmethod
+    def validate_blog_update_url(
+        cls,
+        value: str | None,
+        info,
+    ) -> str | None:
+        return validate_public_url_or_path(
+            value,
+            field_name=info.field_name,
+        )
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_blog_update_tags(
+        cls,
+        value: list[str] | None,
+    ) -> list[str] | None:
+        if value is None:
+            return None
+
+        return BlogPostBase.normalize_tags(value)
+
+
+class BlogRevisionRead(
+    BlogDraftContent,
+):
+    id: str
+    blog_post_id: str
+    version_number: int
+
+    review_status: BLOG_REVIEW_STATUS
+    submitted_at: datetime | None
+
+    reviewed_by_user_id: str | None
+    reviewed_at: datetime | None
+    review_notes: str | None
+
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
+
+    is_current_publication: bool
+    published_by_user_id: str | None
+    published_at: datetime | None
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
+class BlogWorkflowPostRead(BaseModel):
+    id: str
+    slug: str
+
+    owner_user_id: str | None
+    therapist_profile_id: str | None
+
+    status: Literal[
+        "draft",
+        "published",
+    ]
+    published_at: datetime | None
+
+    title: str
+    author_name: str | None
+    content_type: BLOG_CONTENT_TYPE
+
+    created_at: datetime
+    updated_at: datetime
+
+    working_revision: (
+        BlogRevisionRead | None
+    ) = None
+
+    current_publication: (
+        BlogRevisionRead | None
+    ) = None
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
+class BlogReviewRequest(BaseModel):
+    model_config = {
+        "extra": "forbid",
+    }
+
+    decision: BLOG_REVIEW_DECISION
+    notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+    @field_validator("notes")
+    @classmethod
+    def trim_review_notes(
+        cls,
+        value: str | None,
+    ) -> str | None:
+        return clean_optional_text(value)
+
+
+class BlogReviewEventRead(BaseModel):
+    id: str
+    blog_post_id: str
+    revision_id: str | None
+    actor_user_id: str | None
+    action: str
+    note: str | None
+    created_at: datetime
+
+    model_config = {
+        "from_attributes": True,
+    }
+
+
+class BlogAdminReviewRead(BaseModel):
+    post: BlogWorkflowPostRead
+    revision: BlogRevisionRead
+    history: list[
+        BlogReviewEventRead
+    ] = Field(
+        default_factory=list,
+    )
