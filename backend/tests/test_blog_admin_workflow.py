@@ -175,3 +175,43 @@ def test_published_article_edit_creates_next_revision(
     assert result is created
     assert added == [created]
     assert result.version_number == 4
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        lambda: routes.create_blog_post(
+            None,
+            None,
+            make_user(),
+        ),
+        lambda: routes.update_blog_post(
+            "post-1",
+            None,
+            None,
+            make_user(),
+        ),
+        lambda: routes.delete_blog_post(
+            "post-1",
+            None,
+            make_user(),
+        ),
+    ],
+)
+def test_legacy_blog_mutations_are_retired(
+    operation,
+):
+    with pytest.raises(
+        HTTPException
+    ) as exc_info:
+        operation()
+
+    assert (
+        exc_info.value.status_code
+        == 410
+    )
+
+    assert (
+        "editorial publishing workflow"
+        in exc_info.value.detail
+    )

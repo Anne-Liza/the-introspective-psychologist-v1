@@ -98,16 +98,23 @@ def list_blog_posts(
     ).all()
 
 
+def _legacy_blog_mutation_removed() -> None:
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "This legacy blog mutation endpoint has been retired. "
+            "Use the editorial publishing workflow instead."
+        ),
+    )
+
+
 @router.post("", response_model=BlogPostRead, status_code=status.HTTP_201_CREATED)
 def create_blog_post(
     payload: BlogPostCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("blog.create")),
 ):
-    values = payload.model_dump()
-    if values["status"] == "published":
-        values["published_at"] = utc_now()
-    return commit_blog_post(db, BlogPost(**values))
+    _legacy_blog_mutation_removed()
 
 
 @router.patch("/{post_id}", response_model=BlogPostRead)
@@ -117,24 +124,7 @@ def update_blog_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("blog.update")),
 ):
-    post = db.get(BlogPost, post_id)
-    if post is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blog post not found.")
-
-    values = payload.model_dump(exclude_unset=True)
-    for key, value in values.items():
-        setattr(post, key, value)
-
-    if values.get("status") == "published" and post.published_at is None:
-        post.published_at = utc_now()
-
-    if post.cover_image_url and not post.cover_image_alt:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Cover image alt text is required when a cover image is set.",
-        )
-
-    return commit_blog_post(db, post)
+    _legacy_blog_mutation_removed()
 
 
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -143,12 +133,7 @@ def delete_blog_post(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("blog.delete")),
 ):
-    post = db.get(BlogPost, post_id)
-    if post is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blog post not found.")
-    db.delete(post)
-    db.commit()
-    return None
+    _legacy_blog_mutation_removed()
 
 
 # ---------------------------------------------------------------------------
