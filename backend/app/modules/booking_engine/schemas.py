@@ -47,6 +47,7 @@ class PublicBookingConfigRead(BaseModel):
     allocation_mode: str
     hold_minutes: int
     booking_window_days: int
+    timezone: str
     payment_policy: Literal[
         "none",
         "pay_later",

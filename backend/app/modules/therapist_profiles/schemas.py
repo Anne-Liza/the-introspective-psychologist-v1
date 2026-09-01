@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.url_safety import validate_public_url_or_path
 
@@ -105,6 +105,9 @@ class TherapistProfileUpdate(BaseModel):
 
 class TherapistProfilePublicRead(TherapistProfileBase):
     id: str
+    bookable_service_ids: list[str] = Field(
+        default_factory=list,
+    )
 
     model_config = {"from_attributes": True}
 

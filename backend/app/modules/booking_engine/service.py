@@ -77,6 +77,53 @@ from app.modules.therapist_profiles.models import TherapistProfile
 DEFAULT_HOLD_MINUTES = 10
 
 
+def public_therapist_bookable_service_ids(
+    db: Session,
+    *,
+    therapist_profile_id: str,
+) -> list[str]:
+    rules = db.scalars(
+        select(AvailabilityRule).where(
+            AvailabilityRule.is_active.is_(True),
+            AvailabilityRule.is_public.is_(True),
+            (
+                AvailabilityRule
+                .therapist_profile_id
+                .is_(None)
+            )
+            | (
+                AvailabilityRule
+                .therapist_profile_id
+                == therapist_profile_id
+            ),
+        )
+    ).all()
+
+    if not rules:
+        return []
+
+    services = db.scalars(
+        select(Service)
+        .where(
+            Service.is_published.is_(True)
+        )
+        .order_by(
+            Service.sort_order,
+            Service.name,
+        )
+    ).all()
+
+    return [
+        service.id
+        for service in services
+        if any(
+            rule.service_id
+            in (None, service.id)
+            for rule in rules
+        )
+    ]
+
+
 def _notify_therapist_for_confirmation(
     db: Session,
     confirmation: PublicBookingConfirmationRead,
@@ -1170,6 +1217,46 @@ def _published_therapists(db: Session, session_format: str) -> list[TherapistPro
     ]
 
 
+def _assert_public_therapist_eligibility(
+    db: Session,
+    *,
+    therapist_profile_id: str,
+    service_id: str,
+    session_format: str,
+) -> None:
+    published_ids = {
+        profile.id
+        for profile in _published_therapists(
+            db,
+            session_format,
+        )
+    }
+
+    if (
+        therapist_profile_id
+        not in published_ids
+    ):
+        raise ValueError(
+            "Selected therapist is not "
+            "available for this session format."
+        )
+
+    service_ids = (
+        public_therapist_bookable_service_ids(
+            db,
+            therapist_profile_id=(
+                therapist_profile_id
+            ),
+        )
+    )
+
+    if service_id not in service_ids:
+        raise ValueError(
+            "Selected therapist does not "
+            "offer this service."
+        )
+
+
 def list_public_bookable_slots(
     db: Session,
     *,
@@ -1185,7 +1272,21 @@ def list_public_bookable_slots(
     resolved_location = _resolve_location(
         location, requires_location=bool(format_item.get("requires_location"))
     )
-    _published_service(db, service_id, format_label)
+    _published_service(
+        db,
+        service_id,
+        format_label,
+    )
+
+    if preferred_therapist_profile_id:
+        _assert_public_therapist_eligibility(
+            db,
+            therapist_profile_id=(
+                preferred_therapist_profile_id
+            ),
+            service_id=service_id,
+            session_format=format_label,
+        )
 
     raw_slots = list_bookable_slots(
         db,
@@ -1195,11 +1296,18 @@ def list_public_bookable_slots(
         session_format=format_label,
         location=resolved_location,
     )
-    published_ids = {item.id for item in _published_therapists(db, format_label)}
-    if preferred_therapist_profile_id and preferred_therapist_profile_id not in published_ids:
-        raise ValueError("Selected therapist is not available for this session format.")
+    published_ids = {
+        item.id
+        for item in _published_therapists(
+            db,
+            format_label,
+        )
+    }
 
-    unique: dict[tuple, PublicBookableSlotRead] = {}
+    unique: dict[
+        tuple,
+        PublicBookableSlotRead,
+    ] = {}
     for slot in raw_slots:
         if slot.therapist_profile_id is not None and slot.therapist_profile_id not in published_ids:
             continue
@@ -1527,6 +1635,16 @@ def create_public_hold(
         service_id,
         format_label,
     )
+
+    if preferred_therapist_profile_id:
+        _assert_public_therapist_eligibility(
+            db,
+            therapist_profile_id=(
+                preferred_therapist_profile_id
+            ),
+            service_id=service_id,
+            session_format=format_label,
+        )
 
     (
         current_payment_policy,

@@ -10,6 +10,8 @@ import { isAxiosError } from "axios";
 
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
+import { parseApiDateTime } from "../../../lib/apiDateTime";
+import { PublicBookingCalendar } from "../components/PublicBookingCalendar";
 import {
   createPublicBooking,
   createPublicBookingHold,
@@ -130,6 +132,13 @@ export function PublicAppointmentRequestPage() {
     requestedTherapist?.id ??
     "";
 
+  const selectedTherapist =
+    therapistsQuery.data?.find(
+      (therapist) =>
+        therapist.id ===
+        effectivePreferredTherapistId,
+    );
+
   const selectedService = servicesQuery.data?.find(
     (service) => service.id === serviceId,
   );
@@ -178,9 +187,24 @@ export function PublicAppointmentRequestPage() {
           )
         : formats;
 
-    if (matchingFormats.length === 1) {
+    const compatibleFormats =
+      selectedTherapist
+        ? matchingFormats.filter(
+            (format) =>
+              normalize(
+                selectedTherapist
+                  .session_formats,
+              ).includes(
+                normalize(format.key),
+              ),
+          )
+        : matchingFormats;
+
+    if (
+      compatibleFormats.length === 1
+    ) {
       setSessionFormat(
-        matchingFormats[0].key,
+        compatibleFormats[0].key,
       );
     }
   }, [
@@ -189,23 +213,41 @@ export function PublicAppointmentRequestPage() {
     sessionFormat,
     servicesQuery.data,
     configQuery.data?.session_formats,
+    selectedTherapist,
   ]);
 
   const availableFormats = useMemo(() => {
-    const formats = configQuery.data?.session_formats ?? [];
+    const formats =
+      configQuery.data?.session_formats ??
+      [];
 
-    if (!selectedService?.service_format) {
-      return formats;
-    }
+    const serviceFormats =
+      selectedService?.service_format
+        ? formats.filter((format) =>
+            normalize(
+              selectedService.service_format,
+            ).includes(
+              normalize(format.key),
+            ),
+          )
+        : formats;
 
-    const supportedFormat = normalize(selectedService.service_format);
-
-    return formats.filter((format) =>
-      supportedFormat.includes(normalize(format.key)),
+    return serviceFormats.map(
+      (format) => ({
+        ...format,
+        therapistCompatible:
+          !selectedTherapist ||
+          normalize(
+            selectedTherapist.session_formats,
+          ).includes(
+            normalize(format.key),
+          ),
+      }),
     );
   }, [
     configQuery.data?.session_formats,
-    selectedService?.service_format,
+    selectedService,
+    selectedTherapist,
   ]);
 
   const selectedFormat = configQuery.data?.session_formats.find(
@@ -240,6 +282,7 @@ export function PublicAppointmentRequestPage() {
           : {}),
       }),
     enabled: readyForAvailableDates,
+    refetchOnWindowFocus: true,
   });
 
   const readyForSlots = Boolean(
@@ -269,6 +312,7 @@ export function PublicAppointmentRequestPage() {
           : {}),
       }),
     enabled: readyForSlots,
+    refetchOnWindowFocus: true,
   });
 
   const eligibleTherapists = useMemo(() => {
@@ -290,13 +334,6 @@ export function PublicAppointmentRequestPage() {
     sessionFormat,
     therapistsQuery.data,
   ]);
-
-  const selectedTherapist =
-    therapistsQuery.data?.find(
-      (therapist) =>
-        therapist.id ===
-        effectivePreferredTherapistId,
-    );
 
   function therapistSupportsFormat(
     therapistId: string,
@@ -547,9 +584,20 @@ export function PublicAppointmentRequestPage() {
                     ).includes(normalize(format.key));
                   });
 
+                  const compatibleFormats =
+                    selectedTherapist
+                      ? nextFormats.filter(
+                          (format) =>
+                            therapistSupportsFormat(
+                              selectedTherapist.id,
+                              format.key,
+                            ),
+                        )
+                      : nextFormats;
+
                   const nextFormat =
-                    nextFormats.length === 1
-                      ? nextFormats[0].key
+                    compatibleFormats.length === 1
+                      ? compatibleFormats[0].key
                       : "";
 
                   setServiceId(nextServiceId);
@@ -557,20 +605,6 @@ export function PublicAppointmentRequestPage() {
                     nextFormat,
                   );
                   setLocation("");
-
-                  if (
-                    effectivePreferredTherapistId &&
-                    nextFormat &&
-                    !therapistSupportsFormat(
-                      effectivePreferredTherapistId,
-                      nextFormat,
-                    )
-                  ) {
-                    setPreferredTherapistId(
-                      "",
-                    );
-                  }
-
                   setAppointmentDate("");
                   resetSlotSelection();
                 }}
@@ -592,17 +626,26 @@ export function PublicAppointmentRequestPage() {
                 {availableFormats.map((format) => (
                   <label
                     key={format.key}
-                    className={`cursor-pointer rounded-2xl border p-4 transition ${
-                      sessionFormat === format.key
-                        ? "border-[#536b43] bg-[#eef3e9]"
-                        : "border-[#dce3d3] bg-white hover:border-[#9aaa8c]"
-                    }`}
+                    className={[
+                      "rounded-2xl border p-4 transition",
+                      !format.therapistCompatible
+                        ? "cursor-not-allowed border-[#e1e4dc] bg-[#f3f3ef] text-[#9aa096]"
+                        : sessionFormat === format.key
+                          ? "cursor-pointer border-[#536b43] bg-[#eef3e9]"
+                          : "cursor-pointer border-[#dce3d3] bg-white hover:border-[#9aaa8c]",
+                    ].join(" ")}
                   >
                     <input
                       type="radio"
                       name="session-format"
                       value={format.key}
-                      checked={sessionFormat === format.key}
+                      disabled={
+                        !format.therapistCompatible
+                      }
+                      checked={
+                        sessionFormat ===
+                        format.key
+                      }
                       onChange={(event) => {
                         const nextFormat =
                           event.target.value;
@@ -611,26 +654,25 @@ export function PublicAppointmentRequestPage() {
                           nextFormat,
                         );
                         setLocation("");
-
-                        if (
-                          effectivePreferredTherapistId &&
-                          !therapistSupportsFormat(
-                            effectivePreferredTherapistId,
-                            nextFormat,
-                          )
-                        ) {
-                          setPreferredTherapistId(
-                            "",
-                          );
-                        }
-
                         setAppointmentDate("");
                         resetSlotSelection();
                       }}
                       required
                       className="mr-3"
                     />
-                    <span className="font-semibold">{format.label}</span>
+                    <span className="font-semibold">
+                      {format.label}
+                    </span>
+
+                    {!format.therapistCompatible &&
+                    selectedTherapist ? (
+                      <span className="mt-1 block pl-7 text-xs font-normal text-[#8a9184]">
+                        Not available with{" "}
+                        {
+                          selectedTherapist.full_name
+                        }
+                      </span>
+                    ) : null}
                   </label>
                 ))}
               </div>
@@ -687,7 +729,25 @@ export function PublicAppointmentRequestPage() {
                   effectivePreferredTherapistId
                 }
                 onChange={(event) => {
-                  setPreferredTherapistId(event.target.value);
+                  const nextTherapistId =
+                    event.target.value;
+
+                  setPreferredTherapistId(
+                    nextTherapistId,
+                  );
+
+                  if (
+                    nextTherapistId &&
+                    sessionFormat &&
+                    !therapistSupportsFormat(
+                      nextTherapistId,
+                      sessionFormat,
+                    )
+                  ) {
+                    setSessionFormat("");
+                    setLocation("");
+                  }
+
                   setAppointmentDate("");
                   resetSlotSelection();
                 }}
@@ -703,105 +763,99 @@ export function PublicAppointmentRequestPage() {
               </span>
             </label>
 
-            <div className="space-y-5">
-              <fieldset>
-                <legend className="text-sm font-medium">
+            <div className="grid gap-5 md:grid-cols-[minmax(0,1.3fr)_minmax(220px,0.7fr)] md:items-start">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
                   Available date
-                </legend>
+                </p>
 
-                <div className="mt-2 grid max-h-60 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="mt-2">
                   {!readyForAvailableDates ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
+                    <p className="rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
                       Select a service, session format, and location to view available dates.
                     </p>
                   ) : availableDatesQuery.isLoading ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
+                    <p className="rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
                       Finding available dates…
                     </p>
                   ) : availableDatesQuery.isError ? (
-                    <p className="col-span-full rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-800">
+                    <p className="rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-800">
                       {bookingErrorMessage(
                         availableDatesQuery.error,
                         "We could not load available dates. Please try again.",
                       )}
                     </p>
-                  ) : (availableDatesQuery.data ?? []).length === 0 ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
-                      No appointments are currently available for this selection. Try another format, location, or therapist preference.
-                    </p>
                   ) : (
-                    (availableDatesQuery.data ?? []).map(
-                      (availableDate) => (
-                        <label
-                          key={availableDate.date}
-                          className={`cursor-pointer rounded-2xl border p-4 transition ${
-                            appointmentDate === availableDate.date
-                              ? "border-[#536b43] bg-[#eef3e9]"
-                              : "border-[#dce3d3] bg-white hover:border-[#9aaa8c]"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name="appointment-date"
-                            value={availableDate.date}
-                            checked={
-                              appointmentDate ===
-                              availableDate.date
-                            }
-                            onChange={(event) => {
-                              setAppointmentDate(
-                                event.target.value,
-                              );
-                              resetSlotSelection();
-                            }}
-                            className="sr-only"
-                          />
+                    <div className="space-y-3">
+                      {(availableDatesQuery.data ?? []).length === 0 ? (
+                        <p className="rounded-xl border border-[#dce3d3] bg-[#f7f5ed] px-4 py-3 text-sm text-[#738064]">
+                          No available dates in the current booking window.
+                        </p>
+                      ) : null}
 
-                          <span className="block font-semibold">
-                            {dateLabel(availableDate.date)}
-                          </span>
-
-                          <span className="mt-1 block text-xs text-[#738064]">
-                            {availableDate.available_slot_count}{" "}
-                            {availableDate.available_slot_count === 1
-                              ? "time"
-                              : "times"}{" "}
-                            available · from{" "}
-                            {timeLabel(
-                              availableDate.first_start_time,
-                            )}
-                          </span>
-                        </label>
-                      ),
-                    )
+                      <PublicBookingCalendar
+                        key={[
+                          serviceId,
+                          sessionFormat,
+                          location,
+                          effectivePreferredTherapistId,
+                        ].join("|")}
+                        availableDates={
+                          availableDatesQuery.data ?? []
+                        }
+                        bookingWindowDays={
+                          configQuery.data?.booking_window_days ?? 1
+                        }
+                        bookingTimezone={
+                          configQuery.data?.timezone ??
+                          "Africa/Nairobi"
+                        }
+                        selectedDate={appointmentDate}
+                        onSelectDate={(date) => {
+                          setAppointmentDate(date);
+                          resetSlotSelection();
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
-              </fieldset>
+              </div>
 
-              <fieldset>
-                <legend className="text-sm font-medium">
-                  Available time
-                </legend>
+              <div className="min-w-0">
+                <p className="text-sm font-medium">
+                  Available times
+                </p>
 
-                <div className="mt-2 grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
-                  {!appointmentDate ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
-                      Choose an available date to view appointment times.
+                <div className="mt-2 rounded-2xl border border-[#dce3d3] bg-[#fbfaf5] p-4">
+                    {appointmentDate ? (
+                    <p className="text-sm text-[#738064]">
+                      {dateLabel(appointmentDate)}
+                    </p>
+                  ) : null}
+
+                  <div className="mt-3 grid gap-2">
+                  {(availableDatesQuery.data ?? []).length === 0 ? (
+                    <p className="rounded-xl bg-white p-4 text-sm text-[#738064]">
+                      No available slots.
+                    </p>
+                  ) : !appointmentDate ? (
+                    <p className="rounded-xl bg-white p-4 text-sm text-[#738064]">
+                      Select an available date to view times.
                     </p>
                   ) : slotsQuery.isLoading ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
+                    <p className="rounded-xl bg-white p-4 text-sm text-[#738064]">
                       Checking available times…
                     </p>
                   ) : slotsQuery.isError ? (
-                    <p className="col-span-full rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-800">
+                    <p className="rounded-xl bg-red-50 p-4 text-sm font-medium text-red-800">
                       {bookingErrorMessage(
                         slotsQuery.error,
                         "We could not load appointment times. Please try again.",
                       )}
                     </p>
                   ) : (slotsQuery.data ?? []).length === 0 ? (
-                    <p className="col-span-full rounded-2xl bg-[#f7f5ed] p-4 text-sm text-[#738064]">
-                      This date no longer has an available appointment. Choose another available date.
+                    <p className="rounded-xl bg-white p-4 text-sm text-[#738064]">
+                      No available slots.
                     </p>
                   ) : (
                     (slotsQuery.data ?? []).map((slot) => {
@@ -810,7 +864,7 @@ export function PublicAppointmentRequestPage() {
                       return (
                         <label
                           key={value}
-                          className={`cursor-pointer rounded-xl border px-3 py-3 text-center text-sm font-semibold ${
+                          className={`w-full cursor-pointer rounded-xl border px-4 py-3 text-center text-sm font-semibold transition ${
                             selectedSlot === value
                               ? "border-[#536b43] bg-[#eef3e9]"
                               : "border-[#dce3d3]"
@@ -836,8 +890,9 @@ export function PublicAppointmentRequestPage() {
                       );
                     })
                   )}
+                  </div>
                 </div>
-              </fieldset>
+              </div>
             </div>
           </div>
 
@@ -1110,7 +1165,7 @@ export function PublicAppointmentRequestPage() {
                       Hold expires
                     </dt>
                     <dd className="text-right font-semibold">
-                      {new Date(
+                      {parseApiDateTime(
                         paymentHold.expires_at,
                       ).toLocaleTimeString([], {
                         hour: "numeric",

@@ -48,6 +48,7 @@ export type PublicBookingConfig = {
   allocation_mode: string;
   hold_minutes: number;
   booking_window_days: number;
+  timezone: string;
   payment_policy: PaymentPolicy;
   deposit_percentage: number | null;
   confirmation_mode: ConfirmationMode;
