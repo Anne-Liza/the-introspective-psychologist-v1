@@ -256,6 +256,8 @@ export function BookingHoldsPage() {
   } = useQuery({
     queryKey: ["booking-holds"],
     queryFn: fetchBookingHolds,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const updateMutation = useMutation({
