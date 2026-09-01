@@ -139,6 +139,40 @@ export function PublicAppointmentRequestPage() {
         effectivePreferredTherapistId,
     );
 
+  const availableServices = useMemo(() => {
+    const services =
+      servicesQuery.data ?? [];
+
+    const bookableServiceIds =
+      selectedTherapist
+        ?.bookable_service_ids;
+
+    if (
+      !selectedTherapist ||
+      bookableServiceIds === undefined
+    ) {
+      return services;
+    }
+
+    const allowedIds = new Set(
+      bookableServiceIds,
+    );
+
+    return services.filter((service) =>
+      allowedIds.has(service.id),
+    );
+  }, [
+    selectedTherapist,
+    servicesQuery.data,
+  ]);
+
+  const selectedServiceCompatible =
+    !serviceId ||
+    availableServices.some(
+      (service) =>
+        service.id === serviceId,
+    );
+
   const selectedService = servicesQuery.data?.find(
     (service) => service.id === serviceId,
   );
@@ -162,6 +196,18 @@ export function PublicAppointmentRequestPage() {
       );
 
     if (!requestedService) {
+      return;
+    }
+
+    if (
+      selectedTherapist
+        ?.bookable_service_ids !==
+        undefined &&
+      !selectedTherapist
+        .bookable_service_ids.includes(
+          requestedService.id,
+        )
+    ) {
       return;
     }
 
@@ -257,6 +303,7 @@ export function PublicAppointmentRequestPage() {
 
   const readyForAvailableDates = Boolean(
     serviceId &&
+      selectedServiceCompatible &&
       sessionFormat &&
       (!needsLocation || location),
   );
@@ -319,18 +366,32 @@ export function PublicAppointmentRequestPage() {
     const profiles =
       therapistsQuery.data ?? [];
 
-    if (!sessionFormat) {
-      return profiles;
-    }
+    return profiles.filter(
+      (profile) => {
+        const supportsFormat =
+          !sessionFormat ||
+          normalize(
+            profile.session_formats,
+          ).includes(
+            normalize(sessionFormat),
+          );
 
-    return profiles.filter((profile) =>
-      normalize(
-        profile.session_formats,
-      ).includes(
-        normalize(sessionFormat),
-      ),
+        const supportsService =
+          !serviceId ||
+          profile.bookable_service_ids ===
+            undefined ||
+          profile.bookable_service_ids.includes(
+            serviceId,
+          );
+
+        return (
+          supportsFormat &&
+          supportsService
+        );
+      },
     );
   }, [
+    serviceId,
     sessionFormat,
     therapistsQuery.data,
   ]);
@@ -623,12 +684,22 @@ export function PublicAppointmentRequestPage() {
                 className="mt-2 w-full rounded-2xl border border-[#cad5c1] bg-white px-4 py-3 outline-none focus:border-[#6f865b] focus:ring-2 focus:ring-[#e1ead9]"
               >
                 <option value="">Select a service</option>
-                {(servicesQuery.data ?? []).map((service) => (
+                {availableServices.map((service) => (
                   <option key={service.id} value={service.id}>
                     {service.name}{service.duration_minutes ? ` · ${service.duration_minutes} min` : ""}
                   </option>
                 ))}
               </select>
+
+              {selectedTherapist &&
+              selectedTherapist
+                .bookable_service_ids !==
+                undefined &&
+              availableServices.length === 0 ? (
+                <span className="mt-2 block text-xs leading-5 text-[#738064]">
+                  No public booking services are currently configured for this therapist.
+                </span>
+              ) : null}
             </label>
 
             <fieldset>
@@ -747,7 +818,29 @@ export function PublicAppointmentRequestPage() {
                     nextTherapistId,
                   );
 
-                  if (
+                  const nextTherapist =
+                    therapistsQuery.data?.find(
+                      (profile) =>
+                        profile.id ===
+                        nextTherapistId,
+                    );
+
+                  const serviceCompatible =
+                    !nextTherapistId ||
+                    !serviceId ||
+                    nextTherapist
+                      ?.bookable_service_ids ===
+                      undefined ||
+                    nextTherapist
+                      .bookable_service_ids.includes(
+                        serviceId,
+                      );
+
+                  if (!serviceCompatible) {
+                    setServiceId("");
+                    setSessionFormat("");
+                    setLocation("");
+                  } else if (
                     nextTherapistId &&
                     sessionFormat &&
                     !therapistSupportsFormat(

@@ -6,6 +6,37 @@ import { fetchPublicTherapistProfile } from "../lib/therapistProfilesApi";
 
 const FALLBACK_PROFILE_IMAGE = "/images/therapist-placeholder.svg";
 
+function therapistBookingHref(
+  bookingUrl: string,
+  therapistSlug: string,
+) {
+  const localBase = "https://booking.local";
+
+  try {
+    const url = new URL(
+      bookingUrl,
+      localBase,
+    );
+
+    if (url.pathname !== "/book") {
+      return bookingUrl;
+    }
+
+    url.searchParams.set(
+      "therapist",
+      therapistSlug,
+    );
+
+    if (url.origin === localBase) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+
+    return url.toString();
+  } catch {
+    return bookingUrl;
+  }
+}
+
 function DetailRow({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
 
@@ -28,6 +59,14 @@ export function PublicTherapistProfileDetailPage() {
 
   const showState = isLoading || isError || !data;
   const imageUrl = data?.profile_image_url || FALLBACK_PROFILE_IMAGE;
+
+  const bookingHref =
+    data?.booking_cta_url
+      ? therapistBookingHref(
+          data.booking_cta_url,
+          data.slug,
+        )
+      : null;
 
   return (
     <main className="bg-slate-50">
@@ -93,9 +132,9 @@ export function PublicTherapistProfileDetailPage() {
                   ) : null}
 
                   <div className="mt-10 flex flex-wrap gap-4">
-                    {data.booking_cta_url ? (
+                    {bookingHref ? (
                       <a
-                        href={data.booking_cta_url}
+                        href={bookingHref}
                         className="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-semibold text-white"
                       >
                         {data.booking_cta_label || "Book a session"}
