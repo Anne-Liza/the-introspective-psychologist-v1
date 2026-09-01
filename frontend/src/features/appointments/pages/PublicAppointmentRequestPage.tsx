@@ -544,6 +544,17 @@ export function PublicAppointmentRequestPage() {
     appointmentConfirmation?.status ===
     "confirmed";
 
+  const allocatedTherapist =
+    appointmentConfirmation
+      ?.therapist_profile_id
+      ? therapistsQuery.data?.find(
+          (therapist) =>
+            therapist.id ===
+            appointmentConfirmation
+              .therapist_profile_id,
+        )
+      : undefined;
+
   return (
     <main className="bg-[#f7f5ed] text-[#26311f]">
       <section className="mx-auto max-w-6xl px-6 py-16 md:py-24">
@@ -833,7 +844,7 @@ export function PublicAppointmentRequestPage() {
                     </p>
                   ) : null}
 
-                  <div className="mt-3 grid gap-2">
+                  <div className="mt-3 grid max-h-56 gap-2 overflow-y-auto pr-1">
                   {(availableDatesQuery.data ?? []).length === 0 ? (
                     <p className="rounded-xl bg-white p-4 text-sm text-[#738064]">
                       No available slots.
@@ -1002,6 +1013,19 @@ export function PublicAppointmentRequestPage() {
                         "Therapy session"}
                     </dd>
                   </div>
+
+                  {allocatedTherapist ? (
+                    <div className="flex items-start justify-between gap-4">
+                      <dt className="text-[#b9c7ad]">
+                        Therapist
+                      </dt>
+                      <dd className="text-right font-semibold">
+                        {
+                          allocatedTherapist.full_name
+                        }
+                      </dd>
+                    </div>
+                  ) : null}
 
                   <div className="flex items-start justify-between gap-4">
                     <dt className="text-[#b9c7ad]">
