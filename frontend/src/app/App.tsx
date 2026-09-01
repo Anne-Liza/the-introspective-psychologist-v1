@@ -31,6 +31,7 @@ import { SettingsPage } from "../features/settings/pages/SettingsPage";
 import { AppointmentsWorkspacePage } from "../features/appointments/pages/AppointmentsWorkspacePage";
 import { AvailabilityPage } from "../features/availability/pages/AvailabilityPage";
 import { BlogAdminPage } from "../features/blog/pages/BlogAdminPage";
+import { MyBlogArticlesPage } from "../features/blog/pages/MyBlogArticlesPage";
 import { BookingHoldsPage } from "../features/booking-engine/pages/BookingHoldsPage";
 import { BookingSettingsPage } from "../features/booking-engine/pages/BookingSettingsPage";
 import { ClientRecordsPage } from "../features/client-records/pages/ClientRecordsPage";
@@ -110,6 +111,14 @@ export function App() {
         />
         <Route path="availability" element={<PermissionRoute permission="availability.own.read"><AvailabilityPage /></PermissionRoute>} />
         <Route path="blog" element={<PermissionRoute permission="blog.read"><BlogAdminPage /></PermissionRoute>} />
+        <Route
+          path="my-articles"
+          element={
+            <PermissionRoute permission="blog.own.read">
+              <MyBlogArticlesPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="booking-holds" element={<PermissionRoute permission="booking_engine.read"><BookingHoldsPage /></PermissionRoute>} />
         <Route path="booking-settings" element={<PermissionRoute permission="booking_engine.read"><BookingSettingsPage /></PermissionRoute>} />
         <Route path="client-records" element={<PermissionRoute permission="client_records.read"><ClientRecordsPage /></PermissionRoute>} />
