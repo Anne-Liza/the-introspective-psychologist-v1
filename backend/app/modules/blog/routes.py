@@ -346,6 +346,8 @@ def _workflow_post_response(
         post_id=post.id,
     )
 
+    display_revision = working or current
+
     return BlogWorkflowPostRead(
         id=post.id,
         slug=post.slug,
@@ -355,9 +357,21 @@ def _workflow_post_response(
         ),
         status=post.status,
         published_at=post.published_at,
-        title=post.title,
-        author_name=post.author_name,
-        content_type=post.content_type,
+        title=(
+            display_revision.title
+            if display_revision is not None
+            else post.title
+        ),
+        author_name=(
+            display_revision.author_name
+            if display_revision is not None
+            else post.author_name
+        ),
+        content_type=(
+            display_revision.content_type
+            if display_revision is not None
+            else post.content_type
+        ),
         created_at=post.created_at,
         updated_at=post.updated_at,
         working_revision=(
@@ -1254,4 +1268,408 @@ def publish_blog_post_revision(
     return _admin_review_response(
         db,
         revision,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Practice Admin: article authoring
+# ---------------------------------------------------------------------------
+
+
+def _admin_blog_post(
+    db: Session,
+    *,
+    post_id: str,
+) -> BlogPost:
+    post = db.scalar(
+        select(BlogPost).where(
+            BlogPost.id == post_id
+        )
+    )
+
+    if post is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article not found.",
+        )
+
+    return post
+
+
+def _practice_authored_blog_post(
+    db: Session,
+    *,
+    post_id: str,
+) -> BlogPost:
+    post = _admin_blog_post(
+        db,
+        post_id=post_id,
+    )
+
+    if post.therapist_profile_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Provider-authored articles should be "
+                "reviewed through the editorial workflow "
+                "rather than edited by an administrator."
+            ),
+        )
+
+    return post
+
+
+def _editable_admin_blog_revision(
+    db: Session,
+    *,
+    post: BlogPost,
+    current_user: User,
+) -> BlogPostRevision:
+    latest = _latest_blog_revision(
+        db,
+        post_id=post.id,
+    )
+
+    if latest is None:
+        revision = build_revision_from_post(
+            post,
+            version_number=1,
+            created_by_user_id=current_user.id,
+        )
+        db.add(revision)
+        return revision
+
+    if latest.is_current_publication:
+        revision = build_revision_from_post(
+            post,
+            version_number=(
+                latest.version_number + 1
+            ),
+            created_by_user_id=current_user.id,
+        )
+        db.add(revision)
+        return revision
+
+    if latest.review_status in {
+        REVIEW_DRAFT,
+        REVIEW_CHANGES_REQUESTED,
+    }:
+        return latest
+
+    if latest.review_status == REVIEW_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article is currently in review "
+                "and cannot be edited."
+            ),
+        )
+
+    if latest.review_status == REVIEW_APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article is approved and awaiting "
+                "publication."
+            ),
+        )
+
+    if latest.review_status == REVIEW_REJECTED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This article was rejected. "
+                "Its review record is final."
+            ),
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail="This article cannot currently be edited.",
+    )
+
+
+@router.get(
+    "/admin",
+    response_model=list[BlogWorkflowPostRead],
+)
+def list_admin_blog_posts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.read")
+    ),
+):
+    posts = db.scalars(
+        select(BlogPost)
+        .order_by(
+            BlogPost.updated_at.desc(),
+            BlogPost.created_at.desc(),
+        )
+    ).all()
+
+    return [
+        _workflow_post_response(
+            db,
+            post,
+        )
+        for post in posts
+    ]
+
+
+@router.post(
+    "/admin",
+    response_model=BlogWorkflowPostRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_blog_post(
+    payload: BlogDraftCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.create")
+    ),
+):
+    content = payload.model_dump()
+
+    if not content["author_name"]:
+        content["author_name"] = (
+            current_user.full_name
+        )
+
+    post = BlogPost(
+        slug=_allocate_blog_slug(
+            db,
+            title=content["title"],
+        ),
+        owner_user_id=current_user.id,
+        therapist_profile_id=None,
+        created_by_user_id=current_user.id,
+        status="draft",
+        published_at=None,
+        published_by_user_id=None,
+        **content,
+    )
+
+    db.add(post)
+
+    try:
+        db.flush()
+
+        revision = build_revision_from_post(
+            post,
+            version_number=1,
+            created_by_user_id=current_user.id,
+        )
+
+        db.add(revision)
+        db.flush()
+
+        db.add(
+            record_blog_event(
+                post=post,
+                revision=revision,
+                actor_user_id=current_user.id,
+                action="created",
+            )
+        )
+
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "The article could not be created "
+                "because its public identity conflicts "
+                "with an existing article."
+            ),
+        ) from exc
+
+    db.refresh(post)
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.get(
+    "/admin/{post_id}",
+    response_model=BlogWorkflowPostRead,
+)
+def get_admin_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.read")
+    ),
+):
+    post = _admin_blog_post(
+        db,
+        post_id=post_id,
+    )
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.get(
+    "/admin/{post_id}/history",
+    response_model=list[BlogReviewEventRead],
+)
+def get_admin_blog_history(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.read")
+    ),
+):
+    post = _admin_blog_post(
+        db,
+        post_id=post_id,
+    )
+
+    return [
+        BlogReviewEventRead.model_validate(event)
+        for event in _blog_history(
+            db,
+            post_id=post.id,
+        )
+    ]
+
+
+@router.patch(
+    "/admin/{post_id}",
+    response_model=BlogWorkflowPostRead,
+)
+def update_admin_blog_post(
+    post_id: str,
+    payload: BlogDraftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.update")
+    ),
+):
+    post = _practice_authored_blog_post(
+        db,
+        post_id=post_id,
+    )
+
+    revision = _editable_admin_blog_revision(
+        db,
+        post=post,
+        current_user=current_user,
+    )
+
+    values = payload.model_dump(
+        exclude_unset=True,
+    )
+
+    for key, value in values.items():
+        setattr(
+            revision,
+            key,
+            value,
+        )
+
+    revision.updated_by_user_id = (
+        current_user.id
+    )
+
+    try:
+        _validate_revision_content(
+            revision
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=(
+                status.HTTP_422_UNPROCESSABLE_ENTITY
+            ),
+            detail=str(exc),
+        ) from exc
+
+    post.updated_at = utc_now()
+
+    db.add(post)
+    db.add(revision)
+    db.commit()
+
+    db.refresh(post)
+    db.refresh(revision)
+
+    return _workflow_post_response(
+        db,
+        post,
+    )
+
+
+@router.post(
+    "/admin/{post_id}/submit",
+    response_model=BlogWorkflowPostRead,
+)
+def submit_admin_blog_post(
+    post_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("blog.update")
+    ),
+):
+    post = _practice_authored_blog_post(
+        db,
+        post_id=post_id,
+    )
+
+    revision = _working_blog_revision(
+        db,
+        post_id=post.id,
+    )
+
+    if revision is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "There is no working article draft "
+                "to submit."
+            ),
+        )
+
+    try:
+        _validate_revision_content(
+            revision
+        )
+
+        submit_blog_revision(
+            revision
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    revision.updated_by_user_id = (
+        current_user.id
+    )
+    post.updated_at = utc_now()
+
+    db.add(post)
+    db.add(revision)
+
+    db.add(
+        record_blog_event(
+            post=post,
+            revision=revision,
+            actor_user_id=current_user.id,
+            action="submitted",
+        )
+    )
+
+    db.commit()
+    db.refresh(post)
+
+    return _workflow_post_response(
+        db,
+        post,
     )
