@@ -23,6 +23,7 @@ type BlogArticleEditorProps = {
   revision?: BlogRevision | null;
   publicSlug?: string | null;
   mode: "create" | "edit";
+  providerMode?: boolean;
   saving?: boolean;
   submitting?: boolean;
   errorMessage?: string | null;
@@ -96,6 +97,7 @@ export function BlogArticleEditor({
   revision,
   publicSlug,
   mode,
+  providerMode = false,
   saving = false,
   submitting = false,
   errorMessage,
@@ -201,7 +203,9 @@ export function BlogArticleEditor({
         .map((tag) => tag.trim())
         .filter(Boolean),
       author_name:
-        authorName.trim() || null,
+        providerMode
+          ? null
+          : authorName.trim() || null,
 
       content_type: contentType,
 
@@ -229,7 +233,10 @@ export function BlogArticleEditor({
       media_credit:
         mediaCredit.trim() || null,
 
-      is_featured: isFeatured,
+      is_featured:
+        providerMode
+          ? false
+          : isFeatured,
 
       seo_title:
         seoTitle.trim() || null,
@@ -426,15 +433,47 @@ export function BlogArticleEditor({
               placeholder="reflection, anxiety, workplace"
             />
 
-            <Input
-              label="Author display name"
-              value={authorName}
-              onChange={(event) =>
-                setAuthorName(event.target.value)
-              }
-              maxLength={180}
-              placeholder="Practice editorial team"
-            />
+            {!providerMode ? (
+              <Input
+                label="Author display name"
+                value={authorName}
+                onChange={(event) =>
+                  setAuthorName(event.target.value)
+                }
+                maxLength={180}
+                placeholder="Practice editorial team"
+              />
+            ) : (
+              <div
+                className="
+                  rounded-2xl
+                  border border-[#dfe5d6]
+                  bg-[#fafbf7]
+                  px-4 py-3
+                "
+              >
+                <p
+                  className="
+                    text-sm font-medium
+                    text-slate-700
+                  "
+                >
+                  Author
+                </p>
+
+                <p
+                  className="
+                    mt-1 text-sm
+                    leading-6
+                    text-slate-500
+                  "
+                >
+                  Your professional profile
+                  will be used automatically
+                  as the article byline.
+                </p>
+              </div>
+            )}
 
             <label className="block space-y-2">
               <span
@@ -830,35 +869,62 @@ export function BlogArticleEditor({
             />
           </div>
 
-          <label
-            className="
-              mt-5 flex items-start
-              gap-3
-              text-sm text-slate-700
-            "
-          >
-            <input
-              type="checkbox"
-              checked={isFeatured}
-              onChange={(event) =>
-                setIsFeatured(
-                  event.target.checked,
-                )
-              }
-              className="mt-1"
-            />
+          {!providerMode ? (
+            <label
+              className="
+                mt-5 flex items-start
+                gap-3
+                text-sm text-slate-700
+              "
+            >
+              <input
+                type="checkbox"
+                checked={isFeatured}
+                onChange={(event) =>
+                  setIsFeatured(
+                    event.target.checked,
+                  )
+                }
+                className="mt-1"
+              />
 
-            <span>
-              <strong className="font-semibold text-slate-900">
-                Feature this article
-              </strong>
+              <span>
+                <strong
+                  className="
+                    font-semibold
+                    text-slate-900
+                  "
+                >
+                  Feature this article
+                </strong>
 
-              <span className="mt-0.5 block text-slate-500">
-                Featured articles receive priority
-                placement on the public blog.
+                <span
+                  className="
+                    mt-0.5 block
+                    text-slate-500
+                  "
+                >
+                  Featured articles receive
+                  priority placement on the
+                  public blog.
+                </span>
               </span>
-            </span>
-          </label>
+            </label>
+          ) : (
+            <p
+              className="
+                mt-5 rounded-xl
+                bg-[#f5f7f1]
+                px-4 py-3
+                text-sm leading-6
+                text-slate-600
+              "
+            >
+              The practice editorial team
+              manages featured placement after
+              an article has been reviewed.
+            </p>
+          )}
         </section>
 
 

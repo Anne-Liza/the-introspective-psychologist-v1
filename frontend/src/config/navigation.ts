@@ -17,6 +17,11 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
       { label: "Dashboard", href: "/dashboard" },
       { label: "My Profile", href: "/dashboard/my-profile", permission: "therapist_profiles.own.read", exclude_permission: "therapist_profiles.read" },
       {
+        label: "My Articles",
+        href: "/dashboard/my-articles",
+        permission: "blog.own.read",
+      },
+      {
         label: "Appointments",
         href: "/dashboard/appointments",
         permission: [

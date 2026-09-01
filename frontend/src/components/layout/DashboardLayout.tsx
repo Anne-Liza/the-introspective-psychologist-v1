@@ -49,6 +49,7 @@ import {
 const navigationIcons: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
   "/dashboard/my-profile": UserRoundCog,
+  "/dashboard/my-articles": BookOpenText,
   "/dashboard/appointments": CalendarDays,
   "/dashboard/booking-holds": Hourglass,
   "/dashboard/client-records": UsersRound,
