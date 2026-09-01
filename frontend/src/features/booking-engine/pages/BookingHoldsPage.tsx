@@ -1,3 +1,4 @@
+import { parseApiDateTime } from "../../../lib/apiDateTime";
 import {
   useMemo,
   useState,
@@ -178,12 +179,22 @@ function formatDateTime(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(parseApiDateTime(value));
+}
+
+function formatTime(value: string) {
+  return new Date(
+    `2000-01-01T${value}`,
+  ).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function relativeExpiry(value: string) {
   const difference =
-    new Date(value).getTime() - Date.now();
+    parseApiDateTime(value).getTime() -
+    Date.now();
 
   if (difference <= 0) {
     return "Expired";
@@ -570,9 +581,13 @@ export function BookingHoldsPage() {
                               )}
                             </div>
                             <div className="mt-1 text-slate-500">
-                              {hold.start_time}
+                              {formatTime(
+                                hold.start_time,
+                              )}
                               {" to "}
-                              {hold.end_time}
+                              {formatTime(
+                                hold.end_time,
+                              )}
                             </div>
                             <div className="text-slate-500">
                               {hold.session_format
@@ -620,7 +635,7 @@ export function BookingHoldsPage() {
                           <td className="px-5 py-4">
                             <div
                               className={
-                                new Date(
+                                parseApiDateTime(
                                   hold.expires_at,
                                 ).getTime() <=
                                 renderedAt
@@ -694,9 +709,13 @@ export function BookingHoldsPage() {
                         )}
                       </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {hold.start_time}
+                        {formatTime(
+                          hold.start_time,
+                        )}
                         {" to "}
-                        {hold.end_time}
+                        {formatTime(
+                          hold.end_time,
+                        )}
                       </p>
                       <p className="text-sm text-slate-500">
                         {hold.session_format

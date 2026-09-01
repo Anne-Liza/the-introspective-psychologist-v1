@@ -9,14 +9,19 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.dependencies import require_permission
+from app.modules.booking_engine.service import (
+    public_therapist_bookable_service_ids,
+)
+from app.modules.email.service import send_email
+from app.modules.roles.models import Role
 from app.modules.therapist_profiles.models import (
     TherapistProfile,
     TherapistProfileRevision,
 )
 from app.modules.therapist_profiles.schemas import (
     TherapistProfileAccountLink,
-    TherapistProfileAdminReviewRead,
     TherapistProfileAccountOptionRead,
+    TherapistProfileAdminReviewRead,
     TherapistProfileCreate,
     TherapistProfilePublicRead,
     TherapistProfileRead,
@@ -38,8 +43,6 @@ from app.modules.therapist_profiles.service import (
     review_profile,
     submit_profile_for_review,
 )
-from app.modules.email.service import send_email
-from app.modules.roles.models import Role
 from app.modules.users.models import User
 
 router = APIRouter()
@@ -387,21 +390,69 @@ def _admin_review_response(
     )
 
 
-@router.get("/public", response_model=list[TherapistProfilePublicRead])
-def list_public_therapist_profiles(db: Session = Depends(get_db)):
-    return db.scalars(
+def _public_profile_response(
+    db: Session,
+    profile: TherapistProfile,
+) -> TherapistProfilePublicRead:
+    response = (
+        TherapistProfilePublicRead
+        .model_validate(profile)
+    )
+
+    return response.model_copy(
+        update={
+            "bookable_service_ids": (
+                public_therapist_bookable_service_ids(
+                    db,
+                    therapist_profile_id=(
+                        profile.id
+                    ),
+                )
+            )
+        }
+    )
+
+
+@router.get(
+    "/public",
+    response_model=list[
+        TherapistProfilePublicRead
+    ],
+)
+def list_public_therapist_profiles(
+    db: Session = Depends(get_db),
+):
+    profiles = db.scalars(
         select(TherapistProfile)
         .where(
             TherapistProfile.is_published.is_(True),
-            select(TherapistProfileRevision.id)
+            select(
+                TherapistProfileRevision.id
+            )
             .where(
-                TherapistProfileRevision.therapist_profile_id == TherapistProfile.id,
-                TherapistProfileRevision.is_current_publication.is_(True),
+                TherapistProfileRevision
+                .therapist_profile_id
+                == TherapistProfile.id,
+                TherapistProfileRevision
+                .is_current_publication
+                .is_(True),
             )
             .exists(),
         )
-        .order_by(TherapistProfile.sort_order, TherapistProfile.created_at.desc())
+        .order_by(
+            TherapistProfile.sort_order,
+            TherapistProfile
+            .created_at.desc(),
+        )
     ).all()
+
+    return [
+        _public_profile_response(
+            db,
+            profile,
+        )
+        for profile in profiles
+    ]
 
 
 @router.get("/public/{slug}", response_model=TherapistProfilePublicRead)
@@ -420,9 +471,19 @@ def get_public_therapist_profile(slug: str, db: Session = Depends(get_db)):
     )
 
     if profile is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Therapist profile not found.")
+        raise HTTPException(
+            status_code=(
+                status.HTTP_404_NOT_FOUND
+            ),
+            detail=(
+                "Therapist profile not found."
+            ),
+        )
 
-    return profile
+    return _public_profile_response(
+        db,
+        profile,
+    )
 
 
 @router.get("", response_model=list[TherapistProfileRead])

@@ -132,6 +132,9 @@ def public_booking_policy() -> dict[str, Any]:
         "allocation_mode": BOOKING_POLICY.get("allocation_mode", "least_loaded_stable"),
         "hold_minutes": int(BOOKING_POLICY.get("hold_minutes", 10)),
         "booking_window_days": int(BOOKING_POLICY.get("booking_window_days", 45)),
+        "timezone": resolve_booking_timezone(
+            BOOKING_POLICY
+        ),
         "payment_policy": (
             resolve_booking_payment_policy(
                 BOOKING_POLICY

@@ -14,6 +14,7 @@ export type TherapistProfile = {
   languages: string | null;
   location: string | null;
   session_formats: string | null;
+  bookable_service_ids?: string[];
   profile_image_url: string | null;
   booking_cta_label: string | null;
   booking_cta_url: string | null;
