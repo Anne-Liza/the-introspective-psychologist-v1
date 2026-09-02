@@ -1,16 +1,23 @@
 import { Link } from "react-router";
 
-import type { BlogPost } from "../lib/blogApi";
+import {
+  resolveBlogCoverImageUrl,
+  type BlogPost,
+} from "../lib/blogApi";
 import { estimateReadingTime } from "../lib/blogPresentation";
 
 export function BlogPostCard({ post }: { post: BlogPost }) {
   const readingTime = estimateReadingTime(post.body_markdown);
+  const coverImageUrl =
+    resolveBlogCoverImageUrl(
+      post.cover_image_url,
+    );
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-[#d8dfcd] bg-[#fffdf8] shadow-[0_18px_50px_rgba(38,49,31,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_65px_rgba(38,49,31,0.12)]">
-      {post.cover_image_url ? (
+      {coverImageUrl ? (
         <img
-          src={post.cover_image_url}
+          src={coverImageUrl}
           alt={post.cover_image_alt || ""}
           className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
         />

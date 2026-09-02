@@ -2,10 +2,19 @@ import {
   FormEvent,
   useState,
 } from "react";
+import {
+  useQuery,
+} from "@tanstack/react-query";
 
 import { Button } from "../../../components/ui/Button";
 import { Input } from "../../../components/ui/Input";
 import { Textarea } from "../../../components/ui/Textarea";
+import { AssetImage } from "../../files/components/AssetImage";
+import { ManagedImageAssetPicker } from "../../files/components/ManagedImageAssetPicker";
+import {
+  fetchAdminFiles,
+  fetchMyFiles,
+} from "../../files/lib/filesApi";
 import { MarkdownContent } from "./MarkdownContent";
 import {
   BlogContentType,
@@ -152,6 +161,12 @@ export function BlogArticleEditor({
     useState(
       revision?.cover_image_url ?? "",
     );
+  const [
+    coverImageAssetId,
+    setCoverImageAssetId,
+  ] = useState<string | null>(
+    revision?.cover_image_asset_id ?? null,
+  );
   const [coverImageAlt, setCoverImageAlt] =
     useState(
       revision?.cover_image_alt ?? "",
@@ -186,6 +201,33 @@ export function BlogArticleEditor({
   const [showPreview, setShowPreview] =
     useState(false);
 
+
+
+  const coverMediaQuery = useQuery({
+    queryKey:
+      providerMode
+        ? ["my-media"]
+        : ["admin-media"],
+    queryFn: () =>
+      providerMode
+        ? fetchMyFiles()
+        : fetchAdminFiles(),
+    enabled: (
+      mediaType === "image" &&
+      Boolean(coverImageAssetId)
+    ),
+  });
+
+  const coverImageAsset =
+    coverImageAssetId
+      ? (
+        coverMediaQuery.data?.find(
+          (asset) =>
+            asset.id ===
+            coverImageAssetId,
+        ) ?? null
+      )
+      : null;
 
 
   function buildPayload(): BlogDraftPayload {
@@ -223,9 +265,17 @@ export function BlogArticleEditor({
       featured_media_type: mediaType,
 
       cover_image_url:
-        coverImageUrl.trim() || null,
+        mediaType === "image"
+          ? coverImageUrl.trim() || null
+          : null,
+      cover_image_asset_id:
+        mediaType === "image"
+          ? coverImageAssetId
+          : null,
       cover_image_alt:
-        coverImageAlt.trim() || null,
+        mediaType === "image"
+          ? coverImageAlt.trim() || null
+          : null,
       video_url:
         videoUrl.trim() || null,
       media_caption:
@@ -266,7 +316,10 @@ export function BlogArticleEditor({
   const imageIncomplete =
     mediaType === "image" &&
     (
-      !coverImageUrl.trim() ||
+      !(
+        coverImageAssetId ||
+        coverImageUrl.trim()
+      ) ||
       !coverImageAlt.trim()
     );
 
@@ -730,16 +783,33 @@ export function BlogArticleEditor({
                 lg:grid-cols-2
               "
             >
-              <Input
-                label="Image URL or path"
-                value={coverImageUrl}
-                onChange={(event) =>
-                  setCoverImageUrl(
-                    event.target.value,
-                  )
+              <ManagedImageAssetPicker
+                label="Article cover image"
+                purpose="blog_cover_image"
+                scope={
+                  providerMode
+                    ? "mine"
+                    : "admin"
                 }
-                placeholder="https://... or /images/..."
-                required
+                selectedAssetId={
+                  coverImageAssetId
+                }
+                legacyUrl={
+                  coverImageAssetId
+                    ? null
+                    : coverImageUrl || null
+                }
+                disabled={busy}
+                onChange={(assetId) => {
+                  setCoverImageAssetId(
+                    assetId,
+                  );
+
+                  // Any explicit picker action
+                  // replaces or removes the
+                  // legacy URL reference.
+                  setCoverImageUrl("");
+                }}
               />
 
               <Input
@@ -1046,6 +1116,66 @@ export function BlogArticleEditor({
               >
                 {excerpt}
               </p>
+            ) : null}
+
+            {mediaType === "image" ? (
+              <div className="mt-7">
+                {coverImageAsset ? (
+                  <AssetImage
+                    asset={coverImageAsset}
+                    alt={coverImageAlt}
+                    className="
+                      aspect-[16/9]
+                      w-full rounded-3xl
+                      object-cover
+                    "
+                  />
+                ) : coverImageUrl ? (
+                  <img
+                    src={coverImageUrl}
+                    alt={coverImageAlt}
+                    className="
+                      aspect-[16/9]
+                      w-full rounded-3xl
+                      object-cover
+                    "
+                  />
+                ) : coverImageAssetId &&
+                  coverMediaQuery.isLoading ? (
+                  <div
+                    className="
+                      flex aspect-[16/9]
+                      items-center justify-center
+                      rounded-3xl
+                      border border-[#dfe5d6]
+                      bg-white
+                      text-sm text-slate-500
+                    "
+                  >
+                    Loading cover preview…
+                  </div>
+                ) : null}
+
+                {mediaCaption ||
+                mediaCredit ? (
+                  <div
+                    className="
+                      mt-3 space-y-1
+                      text-sm text-slate-500
+                    "
+                  >
+                    {mediaCaption ? (
+                      <p>{mediaCaption}</p>
+                    ) : null}
+
+                    {mediaCredit ? (
+                      <p className="text-xs">
+                        Credit: {mediaCredit}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
 
             <div className="mt-7">

@@ -1,4 +1,7 @@
-import { apiClient } from "../../../lib/api-client";
+import {
+  apiClient,
+  resolveApiAssetUrl,
+} from "../../../lib/api-client";
 
 
 export type BlogPostStatus =
@@ -44,6 +47,7 @@ export type BlogPost = {
   excerpt: string | null;
   body_markdown: string;
   cover_image_url: string | null;
+  cover_image_asset_id: string | null;
   cover_image_alt: string | null;
   category: string | null;
   tags: string[];
@@ -77,6 +81,7 @@ export type BlogDraftPayload = {
   featured_media_type: BlogMediaType;
 
   cover_image_url: string | null;
+  cover_image_asset_id: string | null;
   cover_image_alt: string | null;
   video_url: string | null;
   media_caption: string | null;
@@ -167,6 +172,7 @@ export type BlogPostPayload = Pick<
   | "excerpt"
   | "body_markdown"
   | "cover_image_url"
+  | "cover_image_asset_id"
   | "cover_image_alt"
   | "category"
   | "tags"
@@ -176,6 +182,25 @@ export type BlogPostPayload = Pick<
   | "seo_title"
   | "seo_description"
 >;
+
+
+export function resolveBlogCoverImageUrl(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    value.startsWith(
+      "/files/public/",
+    )
+  ) {
+    return resolveApiAssetUrl(value);
+  }
+
+  return value;
+}
 
 
 export function slugify(

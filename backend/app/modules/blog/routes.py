@@ -4,7 +4,7 @@ import unicodedata
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.core.database import get_db
 from app.core.time import utc_now
@@ -27,6 +27,19 @@ from app.modules.blog.schemas import (
     BlogRevisionRead,
     BlogWorkflowPostRead,
 )
+from app.modules.files.models import (
+    FILE_PURPOSE_BLOG_COVER_IMAGE,
+    FILE_VISIBILITY_INTERNAL,
+    FILE_VISIBILITY_PRIVATE,
+    FILE_VISIBILITY_PUBLIC,
+    FileAsset,
+)
+from app.modules.files.service import (
+    list_file_usage,
+    register_file_usage,
+    set_file_visibility,
+    unregister_file_usage,
+)
 from app.modules.blog.service import (
     REVIEW_APPROVED,
     REVIEW_CHANGES_REQUESTED,
@@ -48,6 +61,275 @@ from app.modules.users.models import User
 router = APIRouter()
 
 
+BLOG_COVER_USAGE_FIELD = "cover_image"
+BLOG_REVISION_USAGE_TYPE = "blog_post_revision"
+BLOG_USAGE_TYPE = "blog_post"
+
+
+def _validated_blog_cover_asset(
+    db: Session,
+    *,
+    asset_id: str | None,
+    owner_user_id: str | None = None,
+) -> FileAsset | None:
+    if asset_id is None:
+        return None
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog cover image asset not found.",
+        )
+
+    if (
+        owner_user_id is not None
+        and asset.owner_user_id
+        != owner_user_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog cover image asset not found.",
+        )
+
+    if (
+        asset.purpose
+        != FILE_PURPOSE_BLOG_COVER_IMAGE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The selected asset is not "
+                "a blog cover image."
+            ),
+        )
+
+    if not (
+        asset.content_type
+        and asset.content_type.startswith("image/")
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A blog cover image must be "
+                "an image file."
+            ),
+        )
+
+    if (
+        asset.visibility
+        == FILE_VISIBILITY_PRIVATE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Private assets cannot be used "
+                "as public blog cover images."
+            ),
+        )
+
+    return asset
+
+
+def _blog_cover_public_url(
+    db: Session,
+    *,
+    post: BlogPost,
+) -> str | None:
+    asset_id = post.cover_image_asset_id
+
+    if not asset_id:
+        return post.cover_image_url
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if (
+        asset is None
+        or asset.visibility
+        != FILE_VISIBILITY_PUBLIC
+        or asset.purpose
+        != FILE_PURPOSE_BLOG_COVER_IMAGE
+        or not asset.content_type
+        or not asset.content_type.startswith(
+            "image/"
+        )
+    ):
+        return None
+
+    return f"/files/public/{asset.id}"
+
+
+def _public_blog_post_response(
+    db: Session,
+    post: BlogPost,
+) -> BlogPostRead:
+    response = BlogPostRead.model_validate(post)
+
+    return response.model_copy(
+        update={
+            "cover_image_url": (
+                _blog_cover_public_url(
+                    db,
+                    post=post,
+                )
+            )
+        }
+    )
+
+
+def _demote_blog_cover_if_no_live_usage(
+    db: Session,
+    *,
+    asset_id: str | None,
+) -> None:
+    if not asset_id:
+        return
+
+    usages = list_file_usage(
+        db,
+        file_id=asset_id,
+    )
+
+    if any(
+        usage.entity_type == BLOG_USAGE_TYPE
+        for usage in usages
+    ):
+        return
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if (
+        asset is not None
+        and asset.purpose
+        == FILE_PURPOSE_BLOG_COVER_IMAGE
+        and asset.visibility
+        == FILE_VISIBILITY_PUBLIC
+    ):
+        set_file_visibility(
+            asset,
+            visibility=FILE_VISIBILITY_INTERNAL,
+        )
+
+
+def _sync_blog_revision_asset_usage(
+    db: Session,
+    *,
+    revision: BlogPostRevision,
+    previous_asset_id: str | None,
+) -> None:
+    current_asset_id = getattr(
+        revision,
+        "cover_image_asset_id",
+        None,
+    )
+
+    if (
+        previous_asset_id
+        and previous_asset_id
+        != current_asset_id
+    ):
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=(
+                BLOG_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=(
+                BLOG_COVER_USAGE_FIELD
+            ),
+        )
+
+    if current_asset_id:
+        register_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=(
+                BLOG_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=(
+                BLOG_COVER_USAGE_FIELD
+            ),
+        )
+
+
+def _publish_blog_cover_asset_usage(
+    db: Session,
+    *,
+    post: BlogPost,
+    revision: BlogPostRevision,
+    previous_asset_id: str | None,
+) -> None:
+    current_asset_id = getattr(
+        revision,
+        "cover_image_asset_id",
+        None,
+    )
+
+    if previous_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=BLOG_USAGE_TYPE,
+            entity_id=post.id,
+            field_name=BLOG_COVER_USAGE_FIELD,
+        )
+
+    if (
+        previous_asset_id
+        and previous_asset_id
+        != current_asset_id
+    ):
+        _demote_blog_cover_if_no_live_usage(
+            db,
+            asset_id=previous_asset_id,
+        )
+
+    if current_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=(
+                BLOG_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=BLOG_COVER_USAGE_FIELD,
+        )
+
+        register_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=BLOG_USAGE_TYPE,
+            entity_id=post.id,
+            field_name=BLOG_COVER_USAGE_FIELD,
+        )
+
+        asset = _validated_blog_cover_asset(
+            db,
+            asset_id=current_asset_id,
+        )
+
+        if asset is not None:
+            set_file_visibility(
+                asset,
+                visibility=FILE_VISIBILITY_PUBLIC,
+            )
+
+
 def commit_blog_post(db: Session, post: BlogPost) -> BlogPost:
     db.add(post)
     try:
@@ -64,7 +346,7 @@ def commit_blog_post(db: Session, post: BlogPost) -> BlogPost:
 
 @router.get("/public", response_model=list[BlogPostRead])
 def list_public_blog_posts(db: Session = Depends(get_db)):
-    return db.scalars(
+    posts = db.scalars(
         select(BlogPost)
         .where(BlogPost.status == "published")
         .order_by(
@@ -73,6 +355,14 @@ def list_public_blog_posts(db: Session = Depends(get_db)):
             BlogPost.created_at.desc(),
         )
     ).all()
+
+    return [
+        _public_blog_post_response(
+            db,
+            post,
+        )
+        for post in posts
+    ]
 
 
 @router.get("/public/{slug}", response_model=BlogPostRead)
@@ -84,8 +374,15 @@ def get_public_blog_post(slug: str, db: Session = Depends(get_db)):
         )
     )
     if post is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blog post not found.")
-    return post
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Blog post not found.",
+        )
+
+    return _public_blog_post_response(
+        db,
+        post,
+    )
 
 
 @router.get("", response_model=list[BlogPostRead])
@@ -419,6 +716,20 @@ def _editable_owned_blog_revision(
             ),
         )
         db.add(revision)
+
+        if getattr(
+            revision,
+            "cover_image_asset_id",
+            None,
+        ):
+            db.flush()
+
+            _sync_blog_revision_asset_usage(
+                db,
+                revision=revision,
+                previous_asset_id=None,
+            )
+
         return revision
 
     if latest.is_current_publication:
@@ -432,6 +743,20 @@ def _editable_owned_blog_revision(
             ),
         )
         db.add(revision)
+
+        if getattr(
+            revision,
+            "cover_image_asset_id",
+            None,
+        ):
+            db.flush()
+
+            _sync_blog_revision_asset_usage(
+                db,
+                revision=revision,
+                previous_asset_id=None,
+            )
+
         return revision
 
     if latest.review_status in {
@@ -672,6 +997,19 @@ def create_my_blog_post(
 
     content = payload.model_dump()
 
+    selected_asset_id = (
+        content.get("cover_image_asset_id")
+    )
+
+    if selected_asset_id:
+        _validated_blog_cover_asset(
+            db,
+            asset_id=selected_asset_id,
+            owner_user_id=current_user.id,
+        )
+
+        content["cover_image_url"] = None
+
     # Provider authorship is derived from the
     # authenticated therapist profile rather
     # than trusted from browser input.
@@ -715,6 +1053,12 @@ def create_my_blog_post(
         )
         db.add(revision)
         db.flush()
+
+        _sync_blog_revision_asset_usage(
+            db,
+            revision=revision,
+            previous_asset_id=None,
+        )
 
         db.add(
             record_blog_event(
@@ -843,6 +1187,47 @@ def update_my_blog_post(
         exclude_unset=True,
     )
 
+    previous_asset_id = (
+        revision.cover_image_asset_id
+    )
+
+    if "cover_image_asset_id" in values:
+        selected_asset_id = values[
+            "cover_image_asset_id"
+        ]
+
+        if selected_asset_id:
+            _validated_blog_cover_asset(
+                db,
+                asset_id=selected_asset_id,
+                owner_user_id=(
+                    current_user.id
+                    if selected_asset_id
+                    != previous_asset_id
+                    else None
+                ),
+            )
+
+            values[
+                "cover_image_url"
+            ] = None
+
+        elif (
+            "cover_image_url"
+            not in values
+        ):
+            values[
+                "cover_image_url"
+            ] = None
+
+    elif (
+        "cover_image_url" in values
+        and values["cover_image_url"]
+    ):
+        values[
+            "cover_image_asset_id"
+        ] = None
+
     # Authenticated therapist identity remains
     # the canonical byline in own workflows.
     values.pop(
@@ -878,6 +1263,14 @@ def update_my_blog_post(
         ) from exc
 
     db.add(revision)
+    db.flush()
+
+    _sync_blog_revision_asset_usage(
+        db,
+        revision=revision,
+        previous_asset_id=previous_asset_id,
+    )
+
     db.commit()
     db.refresh(post)
     db.refresh(revision)
@@ -1127,6 +1520,10 @@ def list_blog_publication_queue(
         )
     ),
 ):
+    newer_revision = aliased(
+        BlogPostRevision
+    )
+
     revisions = db.scalars(
         select(BlogPostRevision)
         .where(
@@ -1135,6 +1532,18 @@ def list_blog_publication_queue(
             BlogPostRevision
             .is_current_publication
             .is_(False),
+            ~(
+                select(
+                    newer_revision.id
+                )
+                .where(
+                    newer_revision.blog_post_id
+                    == BlogPostRevision.blog_post_id,
+                    newer_revision.version_number
+                    > BlogPostRevision.version_number,
+                )
+                .exists()
+            ),
         )
         .order_by(
             BlogPostRevision
@@ -1196,6 +1605,42 @@ def publish_blog_post_revision(
             detail="Article not found.",
         )
 
+    if not revision.is_current_publication:
+        latest_revision = (
+            _latest_blog_revision(
+                db,
+                post_id=post.id,
+            )
+        )
+
+        if (
+            latest_revision is None
+            or latest_revision.id
+            != revision.id
+        ):
+            raise HTTPException(
+                status_code=(
+                    status.HTTP_409_CONFLICT
+                ),
+                detail=(
+                    "Only the latest approved "
+                    "article revision can be "
+                    "published."
+                ),
+            )
+
+    if revision.cover_image_asset_id:
+        _validated_blog_cover_asset(
+            db,
+            asset_id=(
+                revision.cover_image_asset_id
+            ),
+        )
+
+    previous_asset_id = (
+        post.cover_image_asset_id
+    )
+
     previous_publications = (
         _current_blog_publications(
             db,
@@ -1212,6 +1657,15 @@ def publish_blog_post_revision(
             ),
             previous_publications=(
                 previous_publications
+            ),
+        )
+
+        _publish_blog_cover_asset_usage(
+            db,
+            post=post,
+            revision=revision,
+            previous_asset_id=(
+                previous_asset_id
             ),
         )
 
@@ -1322,6 +1776,20 @@ def _editable_admin_blog_revision(
             created_by_user_id=current_user.id,
         )
         db.add(revision)
+
+        if getattr(
+            revision,
+            "cover_image_asset_id",
+            None,
+        ):
+            db.flush()
+
+            _sync_blog_revision_asset_usage(
+                db,
+                revision=revision,
+                previous_asset_id=None,
+            )
+
         return revision
 
     if latest.is_current_publication:
@@ -1333,6 +1801,20 @@ def _editable_admin_blog_revision(
             created_by_user_id=current_user.id,
         )
         db.add(revision)
+
+        if getattr(
+            revision,
+            "cover_image_asset_id",
+            None,
+        ):
+            db.flush()
+
+            _sync_blog_revision_asset_usage(
+                db,
+                revision=revision,
+                previous_asset_id=None,
+            )
+
         return revision
 
     if latest.review_status in {
@@ -1415,6 +1897,18 @@ def create_admin_blog_post(
 ):
     content = payload.model_dump()
 
+    selected_asset_id = (
+        content.get("cover_image_asset_id")
+    )
+
+    if selected_asset_id:
+        _validated_blog_cover_asset(
+            db,
+            asset_id=selected_asset_id,
+        )
+
+        content["cover_image_url"] = None
+
     if not content["author_name"]:
         content["author_name"] = (
             current_user.full_name
@@ -1447,6 +1941,12 @@ def create_admin_blog_post(
 
         db.add(revision)
         db.flush()
+
+        _sync_blog_revision_asset_usage(
+            db,
+            revision=revision,
+            previous_asset_id=None,
+        )
 
         db.add(
             record_blog_event(
@@ -1552,6 +2052,41 @@ def update_admin_blog_post(
         exclude_unset=True,
     )
 
+    previous_asset_id = (
+        revision.cover_image_asset_id
+    )
+
+    if "cover_image_asset_id" in values:
+        selected_asset_id = values[
+            "cover_image_asset_id"
+        ]
+
+        if selected_asset_id:
+            _validated_blog_cover_asset(
+                db,
+                asset_id=selected_asset_id,
+            )
+
+            values[
+                "cover_image_url"
+            ] = None
+
+        elif (
+            "cover_image_url"
+            not in values
+        ):
+            values[
+                "cover_image_url"
+            ] = None
+
+    elif (
+        "cover_image_url" in values
+        and values["cover_image_url"]
+    ):
+        values[
+            "cover_image_asset_id"
+        ] = None
+
     for key, value in values.items():
         setattr(
             revision,
@@ -1579,6 +2114,14 @@ def update_admin_blog_post(
 
     db.add(post)
     db.add(revision)
+    db.flush()
+
+    _sync_blog_revision_asset_usage(
+        db,
+        revision=revision,
+        previous_asset_id=previous_asset_id,
+    )
+
     db.commit()
 
     db.refresh(post)
