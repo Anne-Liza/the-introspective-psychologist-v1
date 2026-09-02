@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "../../auth/context/AuthContext";
+import { MyImageAssetPicker } from "../../files/components/MyImageAssetPicker";
 import {
   ProfileAvatar,
   StatusPill,
@@ -27,6 +28,7 @@ import {
   fetchMyTherapistProfile,
   submitMyTherapistProfile,
   updateMyTherapistProfile,
+  resolveTherapistProfileImageUrl,
   type TherapistProfileRevision,
 } from "../lib/therapistProfilesApi";
 
@@ -41,6 +43,7 @@ type FormValues = {
   location: string;
   session_formats: string;
   profile_image_url: string;
+  profile_image_asset_id: string | null;
 };
 
 const emptyForm: FormValues = {
@@ -54,6 +57,7 @@ const emptyForm: FormValues = {
   location: "",
   session_formats: "",
   profile_image_url: "",
+  profile_image_asset_id: null,
 };
 
 function formFromProfile(
@@ -75,6 +79,8 @@ function formFromProfile(
     location: profile.location || "",
     session_formats: profile.session_formats || "",
     profile_image_url: profile.profile_image_url || "",
+    profile_image_asset_id:
+      profile.profile_image_asset_id || null,
   };
 }
 
@@ -228,6 +234,9 @@ export function MyTherapistProfilePage() {
         ["therapist-profile", "me"],
         nextProfile,
       );
+      queryClient.invalidateQueries({
+        queryKey: ["my-media"],
+      });
       setMessage(
         profile
           ? "Your draft has been saved."
@@ -251,6 +260,9 @@ export function MyTherapistProfilePage() {
         ["therapist-profile", "me"],
         nextProfile,
       );
+      queryClient.invalidateQueries({
+        queryKey: ["my-media"],
+      });
       setMessage(
         "Your profile has been sent to the practice for review.",
       );
@@ -347,7 +359,11 @@ export function MyTherapistProfilePage() {
               <SurfaceCard className="overflow-hidden p-5">
                 <ProfileAvatar
                   name={published.full_name}
-                  src={published.profile_image_url}
+                  src={
+                    resolveTherapistProfileImageUrl(
+                      published.profile_image_url,
+                    )
+                  }
                   className="w-full"
                 />
 
@@ -545,14 +561,27 @@ export function MyTherapistProfilePage() {
                 }
               />
 
-              <Field
-                label="Profile image URL"
-                value={form.profile_image_url}
-                disabled={!editable}
-                placeholder="/images/profile.jpg"
-                onChange={(value) =>
-                  updateField("profile_image_url", value)
+              <MyImageAssetPicker
+                label="Profile image"
+                purpose="therapist_profile_image"
+                selectedAssetId={
+                  form.profile_image_asset_id
                 }
+                legacyUrl={
+                  form.profile_image_asset_id
+                    ? null
+                    : form.profile_image_url
+                }
+                disabled={!editable}
+                onChange={(assetId) => {
+                  setMessage(null);
+                  setForm((current) => ({
+                    ...current,
+                    profile_image_asset_id:
+                      assetId,
+                    profile_image_url: "",
+                  }));
+                }}
               />
             </div>
 

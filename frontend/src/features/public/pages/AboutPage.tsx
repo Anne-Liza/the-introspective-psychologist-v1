@@ -3,7 +3,10 @@ import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 
 import { fetchPublicServices } from "../../services/lib/servicesApi";
-import { fetchPublicTherapistProfiles } from "../../therapist-profiles/lib/therapistProfilesApi";
+import {
+  fetchPublicTherapistProfiles,
+  resolveTherapistProfileImageUrl,
+} from "../../therapist-profiles/lib/therapistProfilesApi";
 import {
   fetchPublicSections,
   findSection,
@@ -252,7 +255,11 @@ export function AboutPage() {
                 <div className="aspect-[4/3] overflow-hidden bg-[#e6eee8]">
                   {therapist.profile_image_url ? (
                     <img
-                      src={therapist.profile_image_url}
+                      src={
+                        resolveTherapistProfileImageUrl(
+                          therapist.profile_image_url,
+                        ) ?? undefined
+                      }
                       alt={therapist.full_name}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                     />

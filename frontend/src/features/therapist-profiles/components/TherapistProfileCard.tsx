@@ -1,11 +1,17 @@
 import { Link } from "react-router";
 
-import { TherapistProfile } from "../lib/therapistProfilesApi";
+import {
+  resolveTherapistProfileImageUrl,
+  type TherapistProfile,
+} from "../lib/therapistProfilesApi";
 
 const FALLBACK_PROFILE_IMAGE = "/images/therapist-placeholder.svg";
 
 export function TherapistProfileCard({ profile }: { profile: TherapistProfile }) {
-  const imageUrl = profile.profile_image_url || FALLBACK_PROFILE_IMAGE;
+  const imageUrl =
+    resolveTherapistProfileImageUrl(
+      profile.profile_image_url,
+    ) ?? FALLBACK_PROFILE_IMAGE;
   const focusAreas = (profile.specialties || profile.approaches || "")
     .split(/[,|]/)
     .map((item) => item.trim())

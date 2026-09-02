@@ -44,6 +44,14 @@ class TherapistProfile(Base):
     location: Mapped[str | None] = mapped_column(String(220), nullable=True)
     session_formats: Mapped[str | None] = mapped_column(String(500), nullable=True)
     profile_image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    profile_image_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "files.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
     booking_cta_label: Mapped[str | None] = mapped_column(String(120), nullable=True)
     booking_cta_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
@@ -115,6 +123,14 @@ class TherapistProfileRevision(Base):
     profile_image_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
+    )
+    profile_image_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "files.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
     )
 
     # Review lifecycle belongs to the content version, not the live identity.

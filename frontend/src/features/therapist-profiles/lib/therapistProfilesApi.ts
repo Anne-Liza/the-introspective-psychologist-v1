@@ -1,5 +1,8 @@
 import { isAxiosError } from "axios";
-import { apiClient } from "../../../lib/api-client";
+import {
+  apiClient,
+  resolveApiAssetUrl,
+} from "../../../lib/api-client";
 
 export type TherapistProfile = {
   id: string;
@@ -16,6 +19,7 @@ export type TherapistProfile = {
   session_formats: string | null;
   bookable_service_ids?: string[];
   profile_image_url: string | null;
+  profile_image_asset_id: string | null;
   booking_cta_label: string | null;
   booking_cta_url: string | null;
   sort_order: number;
@@ -50,6 +54,7 @@ export type TherapistProfileRevision = {
   location: string | null;
   session_formats: string | null;
   profile_image_url: string | null;
+  profile_image_asset_id: string | null;
   review_status:
     | "draft"
     | "pending_review"
@@ -88,7 +93,8 @@ export type TherapistProfileSelfCreatePayload = {
   languages?: string;
   location?: string;
   session_formats?: string;
-  profile_image_url?: string;
+  profile_image_url?: string | null;
+  profile_image_asset_id?: string | null;
 };
 
 export type TherapistProfileSelfUpdatePayload =
@@ -105,7 +111,8 @@ export type TherapistProfileCreatePayload = {
   languages?: string;
   location?: string;
   session_formats?: string;
-  profile_image_url?: string;
+  profile_image_url?: string | null;
+  profile_image_asset_id?: string | null;
   booking_cta_label?: string;
   booking_cta_url?: string;
   sort_order: number;
@@ -117,6 +124,24 @@ export type TherapistProfileUpdatePayload = {
   booking_cta_url?: string;
   sort_order?: number;
 };
+
+
+export function resolveTherapistProfileImageUrl(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return null;
+  }
+
+  // Managed FileAsset URLs belong to the API.
+  // Existing demo/static paths still belong
+  // to the frontend application.
+  if (value.startsWith("/files/")) {
+    return resolveApiAssetUrl(value);
+  }
+
+  return value;
+}
 
 
 export async function fetchTherapistProfiles() {

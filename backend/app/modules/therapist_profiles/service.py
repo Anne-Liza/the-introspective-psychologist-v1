@@ -37,6 +37,7 @@ REVISION_CONTENT_FIELDS = (
     "location",
     "session_formats",
     "profile_image_url",
+    "profile_image_asset_id",
 )
 
 
