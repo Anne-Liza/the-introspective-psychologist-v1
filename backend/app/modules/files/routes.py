@@ -454,6 +454,22 @@ def _delete_asset(
     current_user: User,
     file_asset: FileAsset,
 ) -> None:
+    if (
+        file_asset.visibility
+        == FILE_VISIBILITY_PUBLIC
+    ):
+        raise HTTPException(
+            status_code=(
+                status.HTTP_409_CONFLICT
+            ),
+            detail=(
+                "Public assets cannot be "
+                "deleted directly. Replace "
+                "or unpublish the content "
+                "using the asset first."
+            ),
+        )
+
     if file_is_in_use(
         db,
         file_id=file_asset.id,

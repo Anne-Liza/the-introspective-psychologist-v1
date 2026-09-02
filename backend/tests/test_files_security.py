@@ -374,3 +374,25 @@ async def test_self_service_rejects_unknown_purpose():
         exc_info.value.status_code
         == 400
     )
+
+
+def test_public_asset_cannot_be_deleted_directly():
+    asset = make_asset(
+        visibility=(
+            FILE_VISIBILITY_PUBLIC
+        ),
+    )
+
+    with pytest.raises(
+        HTTPException
+    ) as exc_info:
+        routes._delete_asset(
+            db=SimpleNamespace(),
+            current_user=make_user(),
+            file_asset=asset,
+        )
+
+    assert (
+        exc_info.value.status_code
+        == 409
+    )

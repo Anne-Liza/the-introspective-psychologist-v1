@@ -40,6 +40,7 @@ import { ContactMessagesPage } from "../features/contact-messages/pages/ContactM
 import { EmailTemplatesPage } from "../features/email-templates/pages/EmailTemplatesPage";
 import { EmailLogsPage } from "../features/email/pages/EmailLogsPage";
 import { FilesPage } from "../features/files/pages/FilesPage";
+import { MyMediaPage } from "../features/files/pages/MyMediaPage";
 import { FulfillmentPage } from "../features/fulfillment/pages/FulfillmentPage";
 import { TeamPage } from "../features/invitations/pages/TeamPage";
 import { ContentPage } from "../features/content/pages/ContentPage";
@@ -136,6 +137,14 @@ export function App() {
           }
         />
         <Route path="files" element={<PermissionRoute permission="files.read"><FilesPage /></PermissionRoute>} />
+        <Route
+          path="my-media"
+          element={
+            <PermissionRoute permission="files.own.read">
+              <MyMediaPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="fulfillment" element={<PermissionRoute permission="fulfillment.read"><FulfillmentPage /></PermissionRoute>} />
         <Route path="team" element={<PermissionRoute permission="users.read"><TeamPage /></PermissionRoute>} />
         <Route path="content" element={<PermissionRoute permission="landing_sections.update"><ContentPage /></PermissionRoute>} />
