@@ -19,6 +19,7 @@ FilePurpose = Literal[
     "resource",
     "service_image",
     "product_image",
+    "landing_section_image",
     "internal_document",
     "private_document",
 ]

@@ -265,11 +265,11 @@ export function ManagedImageAssetPicker({
               {selectedAsset.visibility ===
               "public"
                 ? "Public"
-                : "Private working media"}
+                : "Internal working media"}
             </p>
           ) : legacyUrl ? (
             <p className="text-xs leading-5 text-app-muted">
-              This article is using an
+              This content is using an
               existing legacy image. Choose
               or upload a managed image to
               replace it.
