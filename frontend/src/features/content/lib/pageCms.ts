@@ -3,14 +3,17 @@ export type CmsPageKey =
   | "home"
   | "about"
   | "services"
-  | "contact";
+  | "contact"
+  | "footer";
 
 export type CmsField =
   | "eyebrow"
   | "title"
   | "body"
   | "cta"
-  | "image";
+  | "image"
+  | "url"
+  | "email";
 
 export type CmsSectionContent = {
   eyebrow: string;
@@ -487,54 +490,6 @@ export const cmsPages: CmsPageDefinition[] = [
         ),
       },
       {
-        key: "contact.faq.fit",
-        label: "FAQ: Choosing a therapist",
-        description:
-          "Answer a common question about finding the right therapist.",
-        fields: ["eyebrow", "title", "body"],
-        defaults: content(
-          "How do I choose a therapist?",
-          "Start with the therapist profiles and areas of focus. If you are still unsure, send an administrative message and the practice can explain the available options.",
-          "Finding support",
-        ),
-      },
-      {
-        key: "contact.faq.formats",
-        label: "FAQ: Session formats",
-        description:
-          "Explain how online and in-person availability works.",
-        fields: ["eyebrow", "title", "body"],
-        defaults: content(
-          "Are online and in-person sessions available?",
-          "Available formats depend on the therapist, service, and current schedule. Review the service and therapist pages or ask the practice before requesting a time.",
-          "Session formats",
-        ),
-      },
-      {
-        key: "contact.faq.request",
-        label: "FAQ: Appointment requests",
-        description:
-          "Explain what happens after an appointment request.",
-        fields: ["eyebrow", "title", "body"],
-        defaults: content(
-          "What happens after I request an appointment?",
-          "The practice reviews the request, confirms therapist fit and availability, and then contacts you with the next administrative steps.",
-          "Appointments",
-        ),
-      },
-      {
-        key: "contact.faq.fees",
-        label: "FAQ: Fees",
-        description:
-          "Explain where visitors can find current service fees.",
-        fields: ["eyebrow", "title", "body"],
-        defaults: content(
-          "Where can I find service fees?",
-          "Published fees and session details appear on the Services page. The practice can clarify payment timing or package details before you book.",
-          "Fees",
-        ),
-      },
-      {
         key: "contact.emergency",
         label: "Urgent support notice",
         description:
@@ -548,6 +503,105 @@ export const cmsPages: CmsPageDefinition[] = [
       },
     ],
   },
+  {
+    key: "footer",
+    label: "Footer",
+    publicPath: "/",
+    description:
+      "Manage the site-wide footer message and social links.",
+    sections: [
+      {
+        key: "branding.footer_tagline",
+        label: "Footer tagline",
+        description:
+          "The main statement shown in the website footer.",
+        titleLabel: "Footer tagline",
+        fields: ["title"],
+        defaults: content(
+          "A calm space for reflection, healing, and steady emotional growth.",
+        ),
+      },
+      {
+        key: "branding.footer_description",
+        label: "Footer description",
+        description:
+          "The supporting text beneath the footer tagline.",
+        titleLabel: "Footer description",
+        fields: ["title"],
+        defaults: content(
+          "Explore the practice, meet the therapists, and take a clear next step when you feel ready.",
+        ),
+      },
+      {
+        key: "contact.social.instagram",
+        label: "Instagram",
+        description:
+          "Add the practice Instagram profile.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "Instagram",
+        ),
+      },
+      {
+        key: "contact.social.facebook",
+        label: "Facebook",
+        description:
+          "Add the practice Facebook page.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "Facebook",
+        ),
+      },
+      {
+        key: "contact.social.linkedin",
+        label: "LinkedIn",
+        description:
+          "Add the practice LinkedIn page.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "LinkedIn",
+        ),
+      },
+      {
+        key: "contact.social.youtube",
+        label: "YouTube",
+        description:
+          "Add the practice YouTube channel.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "YouTube",
+        ),
+      },
+      {
+        key: "contact.social.tiktok",
+        label: "TikTok",
+        description:
+          "Add the practice TikTok profile.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "TikTok",
+        ),
+      },
+      {
+        key: "contact.social.whatsapp",
+        label: "WhatsApp",
+        description:
+          "Add the practice WhatsApp contact link.",
+        titleLabel: "Label",
+        fields: ["title", "url"],
+        defaults: content(
+          "WhatsApp",
+        ),
+      },
+
+    ],
+  },
+
 ];
 
 export function getCmsPage(

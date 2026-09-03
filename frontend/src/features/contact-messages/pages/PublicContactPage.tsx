@@ -240,7 +240,11 @@ export function PublicContactPage() {
           </aside>
         </div>
 
-        <form data-ui-section="contact-form" onSubmit={handleSubmit} className="rounded-[2.5rem] border border-[#d7dec8] bg-white p-7 shadow-sm md:p-10">
+        <form
+          id="contact-form"
+          data-ui-section="contact-form"
+          onSubmit={handleSubmit}
+ className="rounded-[2.5rem] border border-[#d7dec8] bg-white p-7 shadow-sm md:p-10">
           <p className="text-sm font-semibold uppercase tracking-[0.26em] text-[#6f7f50]">
             Send a message
           </p>

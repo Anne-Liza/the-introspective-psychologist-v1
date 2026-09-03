@@ -2,6 +2,7 @@ import {
   apiClient,
   resolveApiAssetUrl,
 } from "../../../lib/api-client";
+import { applyCmsPreview } from "../../content/lib/cmsPreview";
 
 export type PublicPageName = "branding" | "home" | "about" | "services" | "contact";
 
@@ -19,7 +20,10 @@ export type LandingSection = {
 
 export async function fetchPublicSections(page: PublicPageName) {
   const response = await apiClient.get<LandingSection[]>(`/landing-sections/public/${page}`);
-  return response.data;
+  return applyCmsPreview(
+    page,
+    response.data,
+  );
 }
 
 export function resolveLandingSectionImageUrl(
@@ -77,8 +81,48 @@ export function safePublicWebUrl(value: string | null | undefined) {
   }
 }
 
+export function socialSectionHref(
+  section: LandingSection,
+) {
+  if (
+    section.key ===
+    "contact.social.email"
+  ) {
+    const email =
+      section.body?.trim();
+
+    if (!email) {
+      return null;
+    }
+
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+      email,
+    )
+      ? `mailto:${email}`
+      : null;
+  }
+
+  const value =
+    section.cta_url?.trim();
+
+  if (!value) {
+    return null;
+  }
+
+  return safePublicWebUrl(value);
+}
+
 export function isPracticeSocialLink(section: LandingSection) {
-  return section.key.startsWith("contact.social.") && Boolean(safePublicWebUrl(section.cta_url));
+  return (
+    section.key.startsWith(
+      "contact.social.",
+    ) &&
+    section.key !==
+      "contact.social.email" &&
+    Boolean(
+      socialSectionHref(section),
+    )
+  );
 }
 
 export function isPracticeContactDetail(section: LandingSection) {

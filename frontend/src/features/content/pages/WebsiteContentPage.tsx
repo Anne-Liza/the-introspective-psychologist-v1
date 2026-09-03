@@ -59,7 +59,7 @@ export function WebsiteContentPage() {
 
             <div className="mt-6 border-t border-slate-100 pt-5">
               <p className="text-xs text-slate-500">
-                {page.sections.length} editable sections
+                {page.sections.length + (page.key === "contact" ? 1 : 0)} editable sections
               </p>
 
               <Link

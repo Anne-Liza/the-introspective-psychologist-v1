@@ -25,6 +25,12 @@ import { DataState } from "../../../components/data/DataState";
 import { Input } from "../../../components/ui/Input";
 import { apiClient } from "../../../lib/api-client";
 import { ManagedImageAssetPicker } from "../../files/components/ManagedImageAssetPicker";
+import { ContactFaqManager } from "../components/ContactFaqManager";
+import {
+  clearCmsPreview,
+  cmsPreviewUrl,
+  storeCmsPreview,
+} from "../lib/cmsPreview";
 import {
   getCmsPage,
   type CmsSectionContent,
@@ -152,6 +158,7 @@ export function WebsitePageEditorPage() {
       return response.data;
     },
     onSuccess: () => {
+      clearCmsPreview();
       setEditingKey(null);
       setForm(null);
 
@@ -178,6 +185,8 @@ export function WebsitePageEditorPage() {
       />
     );
   }
+
+  const publicPath = page.publicPath;
 
   const sections =
     sectionsQuery.data ?? [];
@@ -230,6 +239,64 @@ export function WebsitePageEditorPage() {
     });
   }
 
+  function previewChanges(
+    definition: CmsSectionDefinition,
+  ) {
+    if (!form) return;
+
+    const preview = {
+      key: definition.key,
+      title: form.title.trim(),
+      eyebrow: nullable(
+        form.eyebrow,
+      ),
+      body: nullable(
+        form.body,
+      ),
+      cta_label: nullable(
+        form.ctaLabel,
+      ),
+      cta_url: nullable(
+        form.ctaUrl,
+      ),
+      is_visible:
+        form.isVisible,
+    } as {
+      key: string;
+      title: string;
+      eyebrow: string | null;
+      body: string | null;
+      cta_label: string | null;
+      cta_url: string | null;
+      image_url?: string | null;
+      is_visible: boolean;
+    };
+
+    // Managed internal images are
+    // previewed by the picker itself.
+    // Keep the currently published
+    // image in the full-page preview
+    // until the asset is saved/public.
+    if (!form.imageAssetId) {
+      preview.image_url =
+        nullable(
+          form.imageUrl,
+        );
+    }
+
+    storeCmsPreview(
+      preview,
+    );
+
+    window.open(
+      cmsPreviewUrl(
+        publicPath,
+      ),
+      "_blank",
+      "noopener,noreferrer",
+    );
+  }
+
   const showState =
     sectionsQuery.isLoading ||
     sectionsQuery.isError;
@@ -266,7 +333,7 @@ export function WebsitePageEditorPage() {
             rel="noreferrer"
             className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
           >
-            View public page
+            View live page
             <ExternalLink className="h-4 w-4" />
           </a>
         </div>
@@ -290,8 +357,8 @@ export function WebsitePageEditorPage() {
               const status =
                 existing
                   ? existing.is_visible
-                    ? "Visible"
-                    : "Hidden"
+                    ? "Published"
+                    : "Unpublished"
                   : "Using website default";
 
               return (
@@ -454,6 +521,44 @@ export function WebsitePageEditorPage() {
                       </div>
 
                       {definition.fields.includes(
+                        "email",
+                      ) ? (
+                        <div className="mt-5">
+                          <Input
+                            label="Email address"
+                            type="email"
+                            value={form.body}
+                            onChange={(event) =>
+                              setForm({
+                                ...form,
+                                body:
+                                  event.target.value,
+                              })
+                            }
+                            placeholder="hello@example.com"
+                          />
+                        </div>
+                      ) : null}
+
+                      {definition.fields.includes(
+                        "url",
+                      ) ? (
+                        <div className="mt-5">
+                          <Input
+                            label="Profile URL"
+                            value={form.ctaUrl}
+                            onChange={(event) =>
+                              setForm({
+                                ...form,
+                                ctaUrl:
+                                  event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      ) : null}
+
+                      {definition.fields.includes(
                         "image",
                       ) ? (
                         <div className="mt-5">
@@ -532,10 +637,24 @@ export function WebsitePageEditorPage() {
                           }
                         />
 
-                        Show this section on the public page
+                        Publish this section on the public page
                       </label>
 
                       <div className="mt-6 flex flex-wrap gap-3">
+                        <Button
+                          type="button"
+                          onClick={() =>
+                            previewChanges(
+                              definition,
+                            )
+                          }
+                          disabled={
+                            saveMutation.isPending
+                          }
+                        >
+                          Preview changes
+                        </Button>
+
                         <Button
                           type="submit"
                           disabled={
@@ -571,6 +690,10 @@ export function WebsitePageEditorPage() {
               );
             },
           )}
+
+          {page.key === "contact" ? (
+            <ContactFaqManager />
+          ) : null}
         </div>
       )}
     </div>
