@@ -1,17 +1,24 @@
 import { ArrowRight } from "lucide-react";
 import { Link } from "react-router";
 
-import type { CommerceItem } from "../../commerce-core/lib/commerceCoreApi";
+import {
+  resolveCommerceItemImageUrl,
+  type CommerceItem,
+} from "../../commerce-core/lib/commerceCoreApi";
 import { formatMoney } from "../lib/cart";
 import { AddToCartButton } from "./AddToCartButton";
 
 export function CommerceItemCard({ item }: { item: CommerceItem }) {
   const unavailable = item.stock_quantity === 0;
+  const imageUrl =
+    resolveCommerceItemImageUrl(
+      item.image_url,
+    );
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[2rem] border border-[#dfe5d6] bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-      {item.image_url ? (
-        <img src={item.image_url} alt="" className="aspect-[4/3] w-full object-cover" />
+      {imageUrl ? (
+        <img src={imageUrl} alt="" className="aspect-[4/3] w-full object-cover" />
       ) : (
         <div className="aspect-[4/3] bg-[radial-gradient(circle_at_top_left,_#cdd8ba,_transparent_38%),linear-gradient(145deg,_#edf1e6,_#f7f1e7)]" />
       )}

@@ -30,6 +30,7 @@ class TherapistProfileBase(BaseModel):
     location: str | None = None
     session_formats: str | None = None
     profile_image_url: str | None = None
+    profile_image_asset_id: str | None = None
     booking_cta_label: str | None = None
     booking_cta_url: str | None = None
     sort_order: int = 0
@@ -58,6 +59,7 @@ class TherapistProfileCreate(BaseModel):
     location: str | None = None
     session_formats: str | None = None
     profile_image_url: str | None = None
+    profile_image_asset_id: str | None = None
     booking_cta_label: str | None = None
     booking_cta_url: str | None = None
     sort_order: int = 0
@@ -131,6 +133,7 @@ class TherapistProfileRevisionContent(BaseModel):
     location: str | None = None
     session_formats: str | None = None
     profile_image_url: str | None = None
+    profile_image_asset_id: str | None = None
 
     @field_validator("profile_image_url")
     @classmethod
@@ -159,6 +162,7 @@ class TherapistProfileSelfUpdate(BaseModel):
     location: str | None = None
     session_formats: str | None = None
     profile_image_url: str | None = None
+    profile_image_asset_id: str | None = None
 
     @field_validator("profile_image_url")
     @classmethod

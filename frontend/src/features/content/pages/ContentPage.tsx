@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { Button } from "../../../components/ui/Button";
 import { DataState } from "../../../components/data/DataState";
 import { Input } from "../../../components/ui/Input";
+import { ManagedImageAssetPicker } from "../../files/components/ManagedImageAssetPicker";
 import { apiClient } from "../../../lib/api-client";
 
 type LandingSection = {
@@ -15,6 +16,7 @@ type LandingSection = {
   cta_label: string | null;
   cta_url: string | null;
   image_url: string | null;
+  image_asset_id: string | null;
   sort_order: number;
   is_visible: boolean;
 };
@@ -27,6 +29,7 @@ type SectionPayload = {
   cta_label: string | null;
   cta_url: string | null;
   image_url: string | null;
+  image_asset_id: string | null;
   sort_order: number;
   is_visible: boolean;
 };
@@ -39,6 +42,7 @@ const emptyForm = {
   ctaLabel: "",
   ctaUrl: "",
   imageUrl: "",
+  imageAssetId: null as string | null,
   sortOrder: "1",
   isVisible: true,
 };
@@ -83,7 +87,15 @@ export function ContentPage() {
     mutationFn: createSection,
     onSuccess: () => {
       setForm(emptyForm);
-      queryClient.invalidateQueries({ queryKey: ["landing-sections"] });
+      queryClient.invalidateQueries({
+        queryKey: ["landing-sections"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-media"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["public-landing-sections"],
+      });
     },
   });
 
@@ -92,7 +104,15 @@ export function ContentPage() {
     onSuccess: () => {
       setEditingId(null);
       setForm(emptyForm);
-      queryClient.invalidateQueries({ queryKey: ["landing-sections"] });
+      queryClient.invalidateQueries({
+        queryKey: ["landing-sections"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["admin-media"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["public-landing-sections"],
+      });
     },
   });
 
@@ -104,7 +124,10 @@ export function ContentPage() {
       body: nullable(form.body),
       cta_label: nullable(form.ctaLabel),
       cta_url: nullable(form.ctaUrl),
-      image_url: nullable(form.imageUrl),
+      image_url: form.imageAssetId
+        ? null
+        : nullable(form.imageUrl),
+      image_asset_id: form.imageAssetId,
       sort_order: Number(form.sortOrder) || 0,
       is_visible: form.isVisible,
     };
@@ -132,6 +155,7 @@ export function ContentPage() {
       ctaLabel: section.cta_label ?? "",
       ctaUrl: section.cta_url ?? "",
       imageUrl: section.image_url ?? "",
+      imageAssetId: section.image_asset_id,
       sortOrder: String(section.sort_order),
       isVisible: section.is_visible,
     });
@@ -173,7 +197,25 @@ export function ContentPage() {
           <Input label="Title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} required />
           <Input label="CTA label" value={form.ctaLabel} onChange={(event) => setForm({ ...form, ctaLabel: event.target.value })} />
           <Input label="CTA URL" value={form.ctaUrl} onChange={(event) => setForm({ ...form, ctaUrl: event.target.value })} />
-          <Input label="Image URL" value={form.imageUrl} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} />
+          <ManagedImageAssetPicker
+            label="Section image"
+            purpose="landing_section_image"
+            selectedAssetId={
+              form.imageAssetId
+            }
+            legacyUrl={
+              form.imageUrl || null
+            }
+            scope="admin"
+            disabled={isSaving}
+            onChange={(assetId) =>
+              setForm({
+                ...form,
+                imageAssetId: assetId,
+                imageUrl: "",
+              })
+            }
+          />
         </div>
 
         <label className="mt-4 block space-y-2">

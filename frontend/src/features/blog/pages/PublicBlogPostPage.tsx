@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 
 import { MarkdownContent } from "../components/MarkdownContent";
-import { fetchPublicBlogPost } from "../lib/blogApi";
+import {
+  fetchPublicBlogPost,
+  resolveBlogCoverImageUrl,
+} from "../lib/blogApi";
 
 function displayDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -35,6 +38,11 @@ export function PublicBlogPostPage() {
     );
   }
 
+  const coverImageUrl =
+    resolveBlogCoverImageUrl(
+      data.cover_image_url,
+    );
+
   return (
     <main className="bg-[#fbfaf5]">
       <article className="mx-auto max-w-4xl px-5 py-14 lg:px-8 lg:py-20">
@@ -60,9 +68,9 @@ export function PublicBlogPostPage() {
           </div>
         </header>
 
-        {data.cover_image_url ? (
+        {coverImageUrl ? (
           <img
-            src={data.cover_image_url}
+            src={coverImageUrl}
             alt={data.cover_image_alt || ""}
             className="mt-10 aspect-[16/8] w-full rounded-[2rem] object-cover shadow-sm"
           />

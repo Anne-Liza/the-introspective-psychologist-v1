@@ -11,6 +11,7 @@ class LandingSectionBase(BaseModel):
     cta_label: str | None = None
     cta_url: str | None = None
     image_url: str | None = None
+    image_asset_id: str | None = None
     sort_order: int = 0
     is_visible: bool = True
 
@@ -32,6 +33,7 @@ class LandingSectionUpdate(BaseModel):
     cta_label: str | None = None
     cta_url: str | None = None
     image_url: str | None = None
+    image_asset_id: str | None = None
     sort_order: int | None = None
     is_visible: bool | None = None
 

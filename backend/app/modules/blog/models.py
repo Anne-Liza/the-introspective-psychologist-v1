@@ -174,6 +174,14 @@ class BlogPost(Base):
         String(500),
         nullable=True,
     )
+    cover_image_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "files.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
     cover_image_alt: Mapped[str | None] = mapped_column(
         String(220),
         nullable=True,
@@ -347,6 +355,14 @@ class BlogPostRevision(Base):
     cover_image_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
+    )
+    cover_image_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "files.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
     )
     cover_image_alt: Mapped[str | None] = mapped_column(
         String(220),

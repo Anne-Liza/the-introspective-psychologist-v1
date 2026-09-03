@@ -20,6 +20,8 @@ import { TableToolbar } from "../../../components/data/TableToolbar";
 import { Button } from "../../../components/ui/Button";
 import { Textarea } from "../../../components/ui/Textarea";
 import { useAuth } from "../../auth/context/AuthContext";
+import { AssetImage } from "../../files/components/AssetImage";
+import { fetchAdminFiles } from "../../files/lib/filesApi";
 import { BlogArticleEditor } from "../components/BlogArticleEditor";
 import { MarkdownContent } from "../components/MarkdownContent";
 import {
@@ -407,6 +409,27 @@ function ReviewPanel({
 }) {
   const revision = item.revision;
 
+  const {
+    data: adminMedia = [],
+  } = useQuery({
+    queryKey: ["admin-media"],
+    queryFn: fetchAdminFiles,
+    enabled: Boolean(
+      revision.cover_image_asset_id,
+    ),
+  });
+
+  const coverAsset =
+    revision.cover_image_asset_id
+      ? (
+        adminMedia.find(
+          (asset) =>
+            asset.id ===
+            revision.cover_image_asset_id,
+        ) ?? null
+      )
+      : null;
+
   return (
     <section
       className="
@@ -500,6 +523,42 @@ function ReviewPanel({
         "
       >
         <div className="min-w-0">
+          {revision.featured_media_type ===
+          "image" ? (
+            <div className="mb-7">
+              {coverAsset ? (
+                <AssetImage
+                  asset={coverAsset}
+                  alt={
+                    revision.cover_image_alt ??
+                    ""
+                  }
+                  className="aspect-[16/9] w-full rounded-2xl object-cover"
+                />
+              ) : revision.cover_image_url ? (
+                <img
+                  src={revision.cover_image_url}
+                  alt={
+                    revision.cover_image_alt ??
+                    ""
+                  }
+                  className="aspect-[16/9] w-full rounded-2xl object-cover"
+                />
+              ) : (
+                <div className="flex aspect-[16/9] w-full items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-sm text-slate-500">
+                  Cover image unavailable
+                </div>
+              )}
+
+              {revision.media_credit ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Credit:{" "}
+                  {revision.media_credit}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
           {revision.excerpt ? (
             <p
               className="
@@ -953,6 +1012,14 @@ export function BlogAdminPage() {
 
     queryClient.invalidateQueries({
       queryKey: ["public-blog-posts"],
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["public-blog-post"],
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["admin-media"],
     });
   }
 

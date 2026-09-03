@@ -46,6 +46,7 @@ REVISION_CONTENT_FIELDS = (
     "source_published_at",
     "featured_media_type",
     "cover_image_url",
+    "cover_image_asset_id",
     "cover_image_alt",
     "video_url",
     "media_caption",

@@ -4,6 +4,7 @@ import {
   contactSectionHref,
   isPracticeContactDetail,
   isPracticeSocialLink,
+  resolveLandingSectionImageUrl,
   safePublicWebUrl,
   splitPublicList,
   type LandingSection,
@@ -50,6 +51,28 @@ describe("public content helpers", () => {
 
     const missing = section("contact.social.facebook");
     expect(isPracticeSocialLink(missing)).toBe(false);
+  });
+
+  it("resolves managed landing image URLs while preserving legacy paths", () => {
+    expect(
+      resolveLandingSectionImageUrl(
+        "/files/public/asset-1",
+      ),
+    ).toContain(
+      "/files/public/asset-1",
+    );
+
+    expect(
+      resolveLandingSectionImageUrl(
+        "/demo/practice/practice-room.svg",
+      ),
+    ).toBe(
+      "/demo/practice/practice-room.svg",
+    );
+
+    expect(
+      resolveLandingSectionImageUrl(null),
+    ).toBeNull();
   });
 
   it("normalizes configured list values for truthful public counts", () => {

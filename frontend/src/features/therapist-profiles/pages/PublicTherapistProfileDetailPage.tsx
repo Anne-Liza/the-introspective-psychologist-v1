@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
-import { fetchPublicTherapistProfile } from "../lib/therapistProfilesApi";
+import {
+  fetchPublicTherapistProfile,
+  resolveTherapistProfileImageUrl,
+} from "../lib/therapistProfilesApi";
 
 const FALLBACK_PROFILE_IMAGE = "/images/therapist-placeholder.svg";
 
@@ -58,7 +61,10 @@ export function PublicTherapistProfileDetailPage() {
   });
 
   const showState = isLoading || isError || !data;
-  const imageUrl = data?.profile_image_url || FALLBACK_PROFILE_IMAGE;
+  const imageUrl =
+    resolveTherapistProfileImageUrl(
+      data?.profile_image_url,
+    ) ?? FALLBACK_PROFILE_IMAGE;
 
   const bookingHref =
     data?.booking_cta_url

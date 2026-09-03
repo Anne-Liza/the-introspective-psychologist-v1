@@ -3,10 +3,14 @@ import { ArrowUpRight } from "lucide-react";
 import { Link } from "react-router";
 
 import { fetchPublicServices } from "../../services/lib/servicesApi";
-import { fetchPublicTherapistProfiles } from "../../therapist-profiles/lib/therapistProfilesApi";
+import {
+  fetchPublicTherapistProfiles,
+  resolveTherapistProfileImageUrl,
+} from "../../therapist-profiles/lib/therapistProfilesApi";
 import {
   fetchPublicSections,
   findSection,
+  resolveLandingSectionImageUrl,
   splitPublicList,
   type LandingSection,
 } from "../lib/publicContent";
@@ -149,7 +153,12 @@ export function AboutPage() {
         <div className="relative rounded-[3rem] border border-[#d7dec8] bg-[#edf1e7] p-5 md:p-7">
           <div className="absolute -left-8 top-12 hidden h-28 w-28 rounded-full bg-[#c7d3aa] lg:block" />
           <img
-            src={hero.image_url || "/demo/practice/practice-room.svg"}
+            src={
+              resolveLandingSectionImageUrl(
+                hero.image_url,
+              ) ??
+              "/demo/practice/practice-room.svg"
+            }
             alt="A calm therapy practice room"
             className="relative aspect-[4/3] w-full rounded-[2.25rem] bg-white object-cover"
           />
@@ -252,7 +261,11 @@ export function AboutPage() {
                 <div className="aspect-[4/3] overflow-hidden bg-[#e6eee8]">
                   {therapist.profile_image_url ? (
                     <img
-                      src={therapist.profile_image_url}
+                      src={
+                        resolveTherapistProfileImageUrl(
+                          therapist.profile_image_url,
+                        ) ?? undefined
+                      }
                       alt={therapist.full_name}
                       className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                     />

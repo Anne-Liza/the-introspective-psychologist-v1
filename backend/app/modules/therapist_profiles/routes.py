@@ -4,7 +4,7 @@ import unicodedata
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -13,6 +13,19 @@ from app.modules.booking_engine.service import (
     public_therapist_bookable_service_ids,
 )
 from app.modules.email.service import send_email
+from app.modules.files.models import (
+    FILE_PURPOSE_THERAPIST_PROFILE_IMAGE,
+    FILE_VISIBILITY_INTERNAL,
+    FILE_VISIBILITY_PRIVATE,
+    FILE_VISIBILITY_PUBLIC,
+    FileAsset,
+)
+from app.modules.files.service import (
+    list_file_usage,
+    register_file_usage,
+    set_file_visibility,
+    unregister_file_usage,
+)
 from app.modules.roles.models import Role
 from app.modules.therapist_profiles.models import (
     TherapistProfile,
@@ -46,6 +59,269 @@ from app.modules.therapist_profiles.service import (
 from app.modules.users.models import User
 
 router = APIRouter()
+
+
+PROFILE_IMAGE_USAGE_FIELD = "profile_image"
+PROFILE_REVISION_USAGE_TYPE = (
+    "therapist_profile_revision"
+)
+PROFILE_USAGE_TYPE = "therapist_profile"
+
+
+def _validated_profile_image_asset(
+    db: Session,
+    *,
+    asset_id: str | None,
+    owner_user_id: str | None = None,
+) -> FileAsset | None:
+    if asset_id is None:
+        return None
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile image asset not found.",
+        )
+
+    if (
+        owner_user_id is not None
+        and asset.owner_user_id
+        != owner_user_id
+    ):
+        # Do not disclose another user's
+        # private asset.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile image asset not found.",
+        )
+
+    if (
+        asset.purpose
+        != FILE_PURPOSE_THERAPIST_PROFILE_IMAGE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The selected asset is not "
+                "a therapist profile image."
+            ),
+        )
+
+    if not (
+        asset.content_type
+        and asset.content_type.startswith(
+            "image/"
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A therapist profile image "
+                "must be an image file."
+            ),
+        )
+
+    if (
+        asset.visibility
+        == FILE_VISIBILITY_PRIVATE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Private assets cannot be "
+                "used as public therapist "
+                "profile images."
+            ),
+        )
+
+    return asset
+
+
+def _profile_image_public_url(
+    db: Session,
+    *,
+    profile: TherapistProfile,
+) -> str | None:
+    asset_id = profile.profile_image_asset_id
+
+    if not asset_id:
+        return profile.profile_image_url
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if (
+        asset is None
+        or asset.visibility
+        != FILE_VISIBILITY_PUBLIC
+        or asset.purpose
+        != FILE_PURPOSE_THERAPIST_PROFILE_IMAGE
+        or not asset.content_type
+        or not asset.content_type.startswith(
+            "image/"
+        )
+    ):
+        return None
+
+    return f"/files/public/{asset.id}"
+
+
+def _demote_profile_asset_if_no_live_usage(
+    db: Session,
+    *,
+    asset_id: str | None,
+) -> None:
+    if not asset_id:
+        return
+
+    usages = list_file_usage(
+        db,
+        file_id=asset_id,
+    )
+
+    if any(
+        usage.entity_type
+        == PROFILE_USAGE_TYPE
+        for usage in usages
+    ):
+        return
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if (
+        asset is not None
+        and asset.purpose
+        == FILE_PURPOSE_THERAPIST_PROFILE_IMAGE
+        and asset.visibility
+        == FILE_VISIBILITY_PUBLIC
+    ):
+        set_file_visibility(
+            asset,
+            visibility=FILE_VISIBILITY_INTERNAL,
+        )
+
+
+def _sync_profile_revision_asset_usage(
+    db: Session,
+    *,
+    revision: TherapistProfileRevision,
+    previous_asset_id: str | None,
+) -> None:
+    current_asset_id = (
+        revision.profile_image_asset_id
+    )
+
+    if (
+        previous_asset_id
+        and previous_asset_id
+        != current_asset_id
+    ):
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=(
+                PROFILE_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+    if current_asset_id:
+        register_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=(
+                PROFILE_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+
+def _publish_profile_asset_usage(
+    db: Session,
+    *,
+    profile: TherapistProfile,
+    revision: TherapistProfileRevision,
+    previous_asset_id: str | None,
+) -> None:
+    current_asset_id = (
+        revision.profile_image_asset_id
+    )
+
+    if previous_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=PROFILE_USAGE_TYPE,
+            entity_id=profile.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+    if (
+        previous_asset_id
+        and previous_asset_id
+        != current_asset_id
+    ):
+        _demote_profile_asset_if_no_live_usage(
+            db,
+            asset_id=previous_asset_id,
+        )
+
+    if current_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=(
+                PROFILE_REVISION_USAGE_TYPE
+            ),
+            entity_id=revision.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+        register_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=PROFILE_USAGE_TYPE,
+            entity_id=profile.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+        asset = _validated_profile_image_asset(
+            db,
+            asset_id=current_asset_id,
+        )
+
+        if asset is not None:
+            set_file_visibility(
+                asset,
+                visibility=(
+                    FILE_VISIBILITY_PUBLIC
+                ),
+            )
 
 
 def _active_practice_admins(db: Session) -> list[User]:
@@ -242,7 +518,12 @@ def _self_profile_response(
     )
 
     published_profile = (
-        TherapistProfilePublicRead.model_validate(profile) if profile.is_published else None
+        _public_profile_response(
+            db,
+            profile,
+        )
+        if profile.is_published
+        else None
     )
 
     working_revision = (
@@ -278,6 +559,12 @@ def _editable_working_revision(
             created_by_user_id=current_user.id,
         )
         db.add(revision)
+        db.flush()
+        _sync_profile_revision_asset_usage(
+            db,
+            revision=revision,
+            previous_asset_id=None,
+        )
         return revision
 
     if latest.is_current_publication:
@@ -287,6 +574,12 @@ def _editable_working_revision(
             created_by_user_id=current_user.id,
         )
         db.add(revision)
+        db.flush()
+        _sync_profile_revision_asset_usage(
+            db,
+            revision=revision,
+            previous_asset_id=None,
+        )
         return revision
 
     if latest.review_status in {
@@ -376,7 +669,10 @@ def _admin_review_response(
         )
 
     published_profile = (
-        TherapistProfilePublicRead.model_validate(profile)
+        _public_profile_response(
+            db,
+            profile,
+        )
         if profile.is_published
         else None
     )
@@ -401,6 +697,12 @@ def _public_profile_response(
 
     return response.model_copy(
         update={
+            "profile_image_url": (
+                _profile_image_public_url(
+                    db,
+                    profile=profile,
+                )
+            ),
             "bookable_service_ids": (
                 public_therapist_bookable_service_ids(
                     db,
@@ -568,6 +870,23 @@ def create_my_therapist_profile(
 
     content = payload.model_dump()
 
+    profile_image_asset_id = (
+        content.get(
+            "profile_image_asset_id"
+        )
+    )
+
+    if profile_image_asset_id:
+        _validated_profile_image_asset(
+            db,
+            asset_id=profile_image_asset_id,
+            owner_user_id=current_user.id,
+        )
+
+        # Managed assets supersede the
+        # legacy URL field.
+        content["profile_image_url"] = None
+
     profile = TherapistProfile(
         user_id=current_user.id,
         slug=_allocate_therapist_slug(
@@ -591,6 +910,14 @@ def create_my_therapist_profile(
             created_by_user_id=current_user.id,
         )
         db.add(revision)
+        db.flush()
+
+        _sync_profile_revision_asset_usage(
+            db,
+            revision=revision,
+            previous_asset_id=None,
+        )
+
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -627,11 +954,65 @@ def update_my_therapist_profile(
         current_user=current_user,
     )
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(
+        exclude_unset=True
+    )
+
+    previous_asset_id = (
+        revision.profile_image_asset_id
+    )
+
+    if "profile_image_asset_id" in updates:
+        selected_asset_id = updates[
+            "profile_image_asset_id"
+        ]
+
+        if selected_asset_id:
+            _validated_profile_image_asset(
+                db,
+                asset_id=selected_asset_id,
+                owner_user_id=(
+                    current_user.id
+                    if selected_asset_id
+                    != previous_asset_id
+                    else None
+                ),
+            )
+
+            updates[
+                "profile_image_url"
+            ] = None
+        elif (
+            "profile_image_url"
+            not in updates
+        ):
+            updates[
+                "profile_image_url"
+            ] = None
+
+    elif (
+        "profile_image_url" in updates
+        and updates["profile_image_url"]
+    ):
+        # Explicitly switching back to a
+        # legacy/external URL clears the
+        # managed asset.
+        updates[
+            "profile_image_asset_id"
+        ] = None
+
+    for key, value in updates.items():
         setattr(revision, key, value)
 
     revision.updated_by_user_id = current_user.id
     db.add(revision)
+    db.flush()
+
+    _sync_profile_revision_asset_usage(
+        db,
+        revision=revision,
+        previous_asset_id=previous_asset_id,
+    )
 
     try:
         db.commit()
@@ -748,11 +1129,56 @@ def update_therapist_profile_revision_for_review(
         require_pending=True,
     )
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    updates = payload.model_dump(
+        exclude_unset=True
+    )
+
+    previous_asset_id = (
+        revision.profile_image_asset_id
+    )
+
+    if "profile_image_asset_id" in updates:
+        selected_asset_id = updates[
+            "profile_image_asset_id"
+        ]
+
+        if selected_asset_id:
+            _validated_profile_image_asset(
+                db,
+                asset_id=selected_asset_id,
+            )
+
+            updates[
+                "profile_image_url"
+            ] = None
+        elif (
+            "profile_image_url"
+            not in updates
+        ):
+            updates[
+                "profile_image_url"
+            ] = None
+
+    elif (
+        "profile_image_url" in updates
+        and updates["profile_image_url"]
+    ):
+        updates[
+            "profile_image_asset_id"
+        ] = None
+
+    for key, value in updates.items():
         setattr(revision, key, value)
 
     revision.updated_by_user_id = current_user.id
     db.add(revision)
+    db.flush()
+
+    _sync_profile_revision_asset_usage(
+        db,
+        revision=revision,
+        previous_asset_id=previous_asset_id,
+    )
 
     try:
         db.commit()
@@ -850,6 +1276,13 @@ def start_therapist_profile_revision_for_review(
     )
     submit_profile_for_review(revision)
     db.add(revision)
+    db.flush()
+
+    _sync_profile_revision_asset_usage(
+        db,
+        revision=revision,
+        previous_asset_id=None,
+    )
 
     try:
         db.commit()
@@ -872,6 +1305,10 @@ def list_therapist_profile_publication_queue(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("therapist_profiles.publish")),
 ):
+    newer_revision = aliased(
+        TherapistProfileRevision
+    )
+
     revisions = db.scalars(
         select(TherapistProfileRevision)
         .join(
@@ -884,6 +1321,18 @@ def list_therapist_profile_publication_queue(
                 and_(
                     TherapistProfileRevision.review_status == REVIEW_APPROVED,
                     TherapistProfileRevision.is_current_publication.is_(False),
+                    ~(
+                        select(
+                            newer_revision.id
+                        )
+                        .where(
+                            newer_revision.therapist_profile_id
+                            == TherapistProfileRevision.therapist_profile_id,
+                            newer_revision.version_number
+                            > TherapistProfileRevision.version_number,
+                        )
+                        .exists()
+                    ),
                 ),
                 and_(
                     TherapistProfileRevision.is_current_publication.is_(True),
@@ -931,10 +1380,44 @@ def publish_therapist_profile_revision(
             detail="Therapist profile not found.",
         )
 
+    if not revision.is_current_publication:
+        latest_revision = (
+            _latest_profile_revision(
+                db,
+                profile_id=profile.id,
+            )
+        )
+
+        if (
+            latest_revision is None
+            or latest_revision.id
+            != revision.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Only the latest approved "
+                    "therapist profile revision "
+                    "can be published."
+                ),
+            )
+
     previous_publications = _current_profile_publications(
         db,
         profile_id=profile.id,
     )
+
+    previous_asset_id = (
+        profile.profile_image_asset_id
+    )
+
+    if revision.profile_image_asset_id:
+        _validated_profile_image_asset(
+            db,
+            asset_id=(
+                revision.profile_image_asset_id
+            ),
+        )
 
     try:
         publish_profile_revision(
@@ -943,6 +1426,16 @@ def publish_therapist_profile_revision(
             publisher_user_id=current_user.id,
             previous_publications=previous_publications,
         )
+
+        _publish_profile_asset_usage(
+            db,
+            profile=profile,
+            revision=revision,
+            previous_asset_id=(
+                previous_asset_id
+            ),
+        )
+
         db.commit()
     except ValueError as exc:
         db.rollback()
@@ -986,7 +1479,28 @@ def unpublish_therapist_profile(
             detail="Therapist profile not found.",
         )
 
+    previous_asset_id = (
+        profile.profile_image_asset_id
+    )
+
     profile.is_published = False
+
+    if previous_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=PROFILE_USAGE_TYPE,
+            entity_id=profile.id,
+            field_name=(
+                PROFILE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+        _demote_profile_asset_if_no_live_usage(
+            db,
+            asset_id=previous_asset_id,
+        )
+
     db.add(profile)
     db.commit()
     db.refresh(profile)

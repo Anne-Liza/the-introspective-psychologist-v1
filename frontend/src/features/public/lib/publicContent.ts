@@ -1,4 +1,7 @@
-import { apiClient } from "../../../lib/api-client";
+import {
+  apiClient,
+  resolveApiAssetUrl,
+} from "../../../lib/api-client";
 
 export type PublicPageName = "home" | "about" | "contact";
 
@@ -16,6 +19,20 @@ export type LandingSection = {
 export async function fetchPublicSections(page: PublicPageName) {
   const response = await apiClient.get<LandingSection[]>(`/landing-sections/public/${page}`);
   return response.data;
+}
+
+export function resolveLandingSectionImageUrl(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (value.startsWith("/files/public/")) {
+    return resolveApiAssetUrl(value);
+  }
+
+  return value;
 }
 
 export function findSection(sections: LandingSection[], key: string) {

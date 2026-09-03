@@ -634,6 +634,14 @@ export function MyBlogArticlesPage() {
     queryClient.invalidateQueries({
       queryKey: ["public-blog-posts"],
     });
+
+    queryClient.invalidateQueries({
+      queryKey: ["public-blog-post"],
+    });
+
+    queryClient.invalidateQueries({
+      queryKey: ["my-media"],
+    });
   }
 
 

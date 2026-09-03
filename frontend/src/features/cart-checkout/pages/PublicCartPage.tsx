@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 
-import { fetchPublicCommerceItems } from "../../commerce-core/lib/commerceCoreApi";
+import {
+  fetchPublicCommerceItems,
+  resolveCommerceItemImageUrl,
+} from "../../commerce-core/lib/commerceCoreApi";
 import { formatMoney } from "../lib/cart";
 import { useCart } from "../lib/cartStore";
 
@@ -73,7 +76,15 @@ export function PublicCartPage() {
               {resolvedLines.map((line) => (
                 <article key={line.commerce_item_id} className="grid gap-5 rounded-[2rem] border border-[#dfe5d6] bg-white p-5 shadow-sm sm:grid-cols-[7rem_1fr_auto] sm:items-center">
                   {line.item?.image_url ? (
-                    <img src={line.item.image_url} alt="" className="aspect-square w-full rounded-2xl object-cover" />
+                    <img
+                      src={
+                        resolveCommerceItemImageUrl(
+                          line.item.image_url,
+                        ) ?? ""
+                      }
+                      alt=""
+                      className="aspect-square w-full rounded-2xl object-cover"
+                    />
                   ) : (
                     <div className="aspect-square w-full rounded-2xl bg-[linear-gradient(145deg,_#e6ecdc,_#f7f1e7)]" />
                   )}

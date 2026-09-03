@@ -23,6 +23,7 @@ class BlogPostBase(BaseModel):
     excerpt: str | None = Field(default=None, max_length=600)
     body_markdown: str = Field(min_length=1, max_length=100_000)
     cover_image_url: str | None = None
+    cover_image_asset_id: str | None = None
     cover_image_alt: str | None = Field(default=None, max_length=220)
     category: str | None = Field(default=None, max_length=120)
     tags: list[str] = Field(default_factory=list, max_length=20)
@@ -85,8 +86,14 @@ class BlogPostBase(BaseModel):
 
     @model_validator(mode="after")
     def require_cover_image_alt(self):
-        if self.cover_image_url and not self.cover_image_alt:
-            raise ValueError("cover_image_alt is required when cover_image_url is set.")
+        if (
+            self.cover_image_url
+            or self.cover_image_asset_id
+        ) and not self.cover_image_alt:
+            raise ValueError(
+                "cover_image_alt is required "
+                "when a cover image is set."
+            )
         return self
 
 
@@ -100,6 +107,7 @@ class BlogPostUpdate(BaseModel):
     excerpt: str | None = Field(default=None, max_length=600)
     body_markdown: str | None = Field(default=None, min_length=1, max_length=100_000)
     cover_image_url: str | None = None
+    cover_image_asset_id: str | None = None
     cover_image_alt: str | None = Field(default=None, max_length=220)
     category: str | None = Field(default=None, max_length=120)
     tags: list[str] | None = Field(default=None, max_length=20)
@@ -239,6 +247,7 @@ class BlogDraftContent(BaseModel):
     featured_media_type: BLOG_MEDIA_TYPE = "none"
 
     cover_image_url: str | None = None
+    cover_image_asset_id: str | None = None
     cover_image_alt: str | None = Field(
         default=None,
         max_length=220,
@@ -353,10 +362,13 @@ class BlogDraftContent(BaseModel):
             )
 
         if self.featured_media_type == "image":
-            if not self.cover_image_url:
+            if not (
+                self.cover_image_url
+                or self.cover_image_asset_id
+            ):
                 raise ValueError(
-                    "cover_image_url is required "
-                    "for image media."
+                    "A cover image asset or external "
+                    "image URL is required for image media."
                 )
 
             if not self.cover_image_alt:
@@ -432,6 +444,7 @@ class BlogDraftUpdate(BaseModel):
     featured_media_type: BLOG_MEDIA_TYPE | None = None
 
     cover_image_url: str | None = None
+    cover_image_asset_id: str | None = None
     cover_image_alt: str | None = Field(
         default=None,
         max_length=220,

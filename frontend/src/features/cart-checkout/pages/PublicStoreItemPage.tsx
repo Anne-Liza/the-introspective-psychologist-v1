@@ -2,7 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, PackageCheck } from "lucide-react";
 import { Link, useParams } from "react-router";
 
-import { fetchPublicCommerceItem } from "../../commerce-core/lib/commerceCoreApi";
+import {
+  fetchPublicCommerceItem,
+  resolveCommerceItemImageUrl,
+} from "../../commerce-core/lib/commerceCoreApi";
 import { AddToCartButton } from "../components/AddToCartButton";
 import { formatMoney } from "../lib/cart";
 
@@ -38,6 +41,10 @@ export function PublicStoreItemPage() {
   }
 
   const unavailable = data.stock_quantity === 0;
+  const imageUrl =
+    resolveCommerceItemImageUrl(
+      data.image_url,
+    );
 
   return (
     <main className="bg-[#fbfaf5]">
@@ -47,8 +54,8 @@ export function PublicStoreItemPage() {
         </Link>
 
         <div className="mt-8 grid overflow-hidden rounded-[2.5rem] border border-[#dfe5d6] bg-white shadow-sm lg:grid-cols-2">
-          {data.image_url ? (
-            <img src={data.image_url} alt="" className="min-h-[28rem] h-full w-full object-cover" />
+          {imageUrl ? (
+            <img src={imageUrl} alt="" className="min-h-[28rem] h-full w-full object-cover" />
           ) : (
             <div className="min-h-[28rem] bg-[radial-gradient(circle_at_top_left,_#cdd8ba,_transparent_38%),linear-gradient(145deg,_#edf1e6,_#f7f1e7)]" />
           )}

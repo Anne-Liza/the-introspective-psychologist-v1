@@ -1,4 +1,7 @@
-import { apiClient } from "../../../lib/api-client";
+import {
+  apiClient,
+  resolveApiAssetUrl,
+} from "../../../lib/api-client";
 
 export type CommerceItem = {
   id: string;
@@ -16,6 +19,7 @@ export type CommerceItem = {
   session_credit_count: number | null;
   fulfillment_type: string;
   image_url: string | null;
+  image_asset_id: string | null;
   sort_order: number;
   is_featured: boolean;
   is_published: boolean;
@@ -66,6 +70,25 @@ export type PublicCommerceOrderPayload = {
   }>;
 };
 
+export function resolveCommerceItemImageUrl(
+  value: string | null | undefined,
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    value.startsWith(
+      "/files/public/",
+    )
+  ) {
+    return resolveApiAssetUrl(value);
+  }
+
+  return value;
+}
+
+
 export async function fetchPublicCommerceItems(): Promise<CommerceItem[]> {
   return (await apiClient.get("/commerce-core/public/items")).data;
 }
@@ -99,6 +122,7 @@ export type CommerceItemPayload = {
   session_credit_count?: number | null;
   fulfillment_type?: string;
   image_url?: string | null;
+  image_asset_id?: string | null;
   sort_order?: number;
   is_featured?: boolean;
   is_published?: boolean;

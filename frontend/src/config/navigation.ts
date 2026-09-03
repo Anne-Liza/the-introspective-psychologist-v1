@@ -22,6 +22,12 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
         permission: "blog.own.read",
       },
       {
+        label: "My Media",
+        href: "/dashboard/my-media",
+        permission: "files.own.read",
+        exclude_permission: "files.read",
+      },
+      {
         label: "Appointments",
         href: "/dashboard/appointments",
         permission: [
