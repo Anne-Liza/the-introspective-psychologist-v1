@@ -21,18 +21,294 @@ from app.modules.commerce_core.service import (
     create_public_order_from_payload,
     get_order_with_items,
 )
+from app.modules.files.models import (
+    FILE_PURPOSE_PRODUCT_IMAGE,
+    FILE_VISIBILITY_INTERNAL,
+    FILE_VISIBILITY_PRIVATE,
+    FILE_VISIBILITY_PUBLIC,
+    FileAsset,
+)
+from app.modules.files.service import (
+    list_file_usage,
+    register_file_usage,
+    set_file_visibility,
+    unregister_file_usage,
+)
 from app.modules.users.models import User
+
 
 router = APIRouter()
 
 
+COMMERCE_IMAGE_USAGE_TYPE = "commerce_item"
+COMMERCE_IMAGE_USAGE_FIELD = "image"
+
+
+def _validated_commerce_image_asset(
+    db: Session,
+    *,
+    asset_id: str | None,
+) -> FileAsset | None:
+    if asset_id is None:
+        return None
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if asset is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Product image asset not found.",
+        )
+
+    if (
+        asset.purpose
+        != FILE_PURPOSE_PRODUCT_IMAGE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The selected asset is not "
+                "a product image."
+            ),
+        )
+
+    if not (
+        asset.content_type
+        and asset.content_type.startswith(
+            "image/"
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "A product image asset must "
+                "be an image file."
+            ),
+        )
+
+    if (
+        asset.visibility
+        == FILE_VISIBILITY_PRIVATE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Private assets cannot be "
+                "used as product images."
+            ),
+        )
+
+    return asset
+
+
+def _commerce_image_public_url(
+    db: Session,
+    *,
+    item: CommerceItem,
+) -> str | None:
+    if not item.image_asset_id:
+        return item.image_url
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id
+            == item.image_asset_id
+        )
+    )
+
+    if (
+        asset is None
+        or asset.visibility
+        != FILE_VISIBILITY_PUBLIC
+        or asset.purpose
+        != FILE_PURPOSE_PRODUCT_IMAGE
+        or not asset.content_type
+        or not asset.content_type.startswith(
+            "image/"
+        )
+    ):
+        return None
+
+    return (
+        f"/files/public/{asset.id}"
+    )
+
+
+def _public_commerce_item_response(
+    db: Session,
+    item: CommerceItem,
+) -> CommerceItemRead:
+    response = (
+        CommerceItemRead.model_validate(
+            item
+        )
+    )
+
+    return response.model_copy(
+        update={
+            "image_url":
+                _commerce_image_public_url(
+                    db,
+                    item=item,
+                )
+        }
+    )
+
+
+def _sync_commerce_image_visibility(
+    db: Session,
+    *,
+    asset_id: str | None,
+) -> None:
+    if not asset_id:
+        return
+
+    asset = db.scalar(
+        select(FileAsset).where(
+            FileAsset.id == asset_id
+        )
+    )
+
+    if (
+        asset is None
+        or asset.purpose
+        != FILE_PURPOSE_PRODUCT_IMAGE
+    ):
+        return
+
+    usages = list_file_usage(
+        db,
+        file_id=asset_id,
+    )
+
+    commerce_item_ids = [
+        usage.entity_id
+        for usage in usages
+        if (
+            usage.entity_type
+            == COMMERCE_IMAGE_USAGE_TYPE
+            and usage.field_name
+            == COMMERCE_IMAGE_USAGE_FIELD
+        )
+    ]
+
+    has_published_usage = False
+
+    if commerce_item_ids:
+        has_published_usage = (
+            db.scalar(
+                select(
+                    CommerceItem.id
+                )
+                .where(
+                    CommerceItem.id.in_(
+                        commerce_item_ids
+                    ),
+                    CommerceItem
+                    .is_published
+                    .is_(True),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    set_file_visibility(
+        asset,
+        visibility=(
+            FILE_VISIBILITY_PUBLIC
+            if has_published_usage
+            else FILE_VISIBILITY_INTERNAL
+        ),
+    )
+
+
+def _sync_commerce_image_usage(
+    db: Session,
+    *,
+    item: CommerceItem,
+    previous_asset_id: str | None,
+) -> None:
+    current_asset_id = (
+        item.image_asset_id
+    )
+
+    if (
+        previous_asset_id
+        and previous_asset_id
+        != current_asset_id
+    ):
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=(
+                COMMERCE_IMAGE_USAGE_TYPE
+            ),
+            entity_id=item.id,
+            field_name=(
+                COMMERCE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+    if current_asset_id:
+        register_file_usage(
+            db,
+            file_id=current_asset_id,
+            entity_type=(
+                COMMERCE_IMAGE_USAGE_TYPE
+            ),
+            entity_id=item.id,
+            field_name=(
+                COMMERCE_IMAGE_USAGE_FIELD
+            ),
+        )
+
+    db.flush()
+
+    if previous_asset_id:
+        _sync_commerce_image_visibility(
+            db,
+            asset_id=previous_asset_id,
+        )
+
+    if current_asset_id:
+        _sync_commerce_image_visibility(
+            db,
+            asset_id=current_asset_id,
+        )
+
+
 @router.get("/public/items", response_model=list[CommerceItemRead])
 def list_public_commerce_items(db: Session = Depends(get_db)):
-    return db.scalars(
+    items = db.scalars(
         select(CommerceItem)
-        .where(CommerceItem.is_published.is_(True))
-        .order_by(CommerceItem.is_featured.desc(), CommerceItem.sort_order, CommerceItem.created_at.desc())
+        .where(
+            CommerceItem
+            .is_published
+            .is_(True)
+        )
+        .order_by(
+            CommerceItem
+            .is_featured
+            .desc(),
+            CommerceItem.sort_order,
+            CommerceItem
+            .created_at
+            .desc(),
+        )
     ).all()
+
+    return [
+        _public_commerce_item_response(
+            db,
+            item,
+        )
+        for item in items
+    ]
 
 
 @router.get("/public/items/{slug}", response_model=CommerceItemRead)
@@ -44,8 +320,15 @@ def get_public_commerce_item(slug: str, db: Session = Depends(get_db)):
         )
     )
     if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commerce item not found.")
-    return item
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Commerce item not found.",
+        )
+
+    return _public_commerce_item_response(
+        db,
+        item,
+    )
 
 
 @router.post("/public/orders", response_model=CommerceOrderRead, status_code=status.HTTP_201_CREATED)
@@ -81,10 +364,34 @@ def create_commerce_item(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_permission("commerce_core.create")),
 ):
-    item = CommerceItem(**payload.model_dump())
+    values = payload.model_dump()
+
+    selected_asset_id = (
+        values.get("image_asset_id")
+    )
+
+    if selected_asset_id:
+        _validated_commerce_image_asset(
+            db,
+            asset_id=selected_asset_id,
+        )
+
+        values["image_url"] = None
+
+    item = CommerceItem(**values)
+
     db.add(item)
+    db.flush()
+
+    _sync_commerce_image_usage(
+        db,
+        item=item,
+        previous_asset_id=None,
+    )
+
     db.commit()
     db.refresh(item)
+
     return item
 
 
@@ -99,12 +406,53 @@ def update_commerce_item(
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commerce item not found.")
 
-    for key, value in payload.model_dump(exclude_unset=True).items():
+    previous_asset_id = (
+        item.image_asset_id
+    )
+
+    values = payload.model_dump(
+        exclude_unset=True,
+    )
+
+    if "image_asset_id" in values:
+        selected_asset_id = (
+            values["image_asset_id"]
+        )
+
+        if selected_asset_id:
+            _validated_commerce_image_asset(
+                db,
+                asset_id=selected_asset_id,
+            )
+
+            values["image_url"] = None
+
+        elif "image_url" not in values:
+            values["image_url"] = None
+
+    elif (
+        "image_url" in values
+        and values["image_url"]
+    ):
+        values["image_asset_id"] = None
+
+    for key, value in values.items():
         setattr(item, key, value)
 
     db.add(item)
+    db.flush()
+
+    _sync_commerce_image_usage(
+        db,
+        item=item,
+        previous_asset_id=(
+            previous_asset_id
+        ),
+    )
+
     db.commit()
     db.refresh(item)
+
     return item
 
 
@@ -118,8 +466,34 @@ def delete_commerce_item(
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commerce item not found.")
 
+    previous_asset_id = (
+        item.image_asset_id
+    )
+
+    if previous_asset_id:
+        unregister_file_usage(
+            db,
+            file_id=previous_asset_id,
+            entity_type=(
+                COMMERCE_IMAGE_USAGE_TYPE
+            ),
+            entity_id=item.id,
+            field_name=(
+                COMMERCE_IMAGE_USAGE_FIELD
+            ),
+        )
+
     db.delete(item)
+    db.flush()
+
+    if previous_asset_id:
+        _sync_commerce_image_visibility(
+            db,
+            asset_id=previous_asset_id,
+        )
+
     db.commit()
+
     return None
 
 

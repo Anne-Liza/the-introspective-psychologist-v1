@@ -4,6 +4,7 @@ import { Link } from "react-router";
 
 import { DataState } from "../../../components/data/DataState";
 import { Button } from "../../../components/ui/Button";
+import { ManagedImageAssetPicker } from "../../files/components/ManagedImageAssetPicker";
 import {
   createCommerceItem,
   deleteCommerceItem,
@@ -25,8 +26,18 @@ export function CommerceCorePage({
   const [productSlug, setProductSlug] = useState("");
   const [productPrice, setProductPrice] = useState("1");
   const [productType, setProductType] = useState("product");
+  const [productCategory, setProductCategory] = useState("");
+  const [productSummary, setProductSummary] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productSku, setProductSku] = useState("");
+  const [productFulfillment, setProductFulfillment] = useState("manual");
+  const [productFeatured, setProductFeatured] = useState(false);
   const [productStock, setProductStock] = useState("");
   const [productImageUrl, setProductImageUrl] = useState("");
+  const [
+    productImageAssetId,
+    setProductImageAssetId,
+  ] = useState<string | null>(null);
   const [productPublished, setProductPublished] = useState(true);
 
   const itemsQuery = useQuery({
@@ -45,12 +56,22 @@ export function CommerceCorePage({
     mutationFn: createCommerceItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-item"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-media"] });
       setProductName("");
       setProductSlug("");
       setProductPrice("1");
       setProductType("product");
+      setProductCategory("");
+      setProductSummary("");
+      setProductDescription("");
+      setProductSku("");
+      setProductFulfillment("manual");
+      setProductFeatured(false);
       setProductStock("");
       setProductImageUrl("");
+      setProductImageAssetId(null);
       setProductPublished(true);
       setShowProductForm(false);
     },
@@ -60,14 +81,24 @@ export function CommerceCorePage({
     mutationFn: updateCommerceItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-item"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-media"] });
       setEditingProductId(null);
       setShowProductForm(false);
       setProductName("");
       setProductSlug("");
       setProductPrice("1");
       setProductType("product");
+      setProductCategory("");
+      setProductSummary("");
+      setProductDescription("");
+      setProductSku("");
+      setProductFulfillment("manual");
+      setProductFeatured(false);
       setProductStock("");
       setProductImageUrl("");
+      setProductImageAssetId(null);
       setProductPublished(true);
     },
   });
@@ -76,6 +107,9 @@ export function CommerceCorePage({
     mutationFn: deleteCommerceItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-items"] });
+      queryClient.invalidateQueries({ queryKey: ["public-commerce-item"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-media"] });
     },
   });
 
@@ -120,8 +154,15 @@ export function CommerceCorePage({
                 setProductSlug("");
                 setProductPrice("1");
                 setProductType("product");
+                setProductCategory("");
+                setProductSummary("");
+                setProductDescription("");
+                setProductSku("");
+                setProductFulfillment("manual");
+                setProductFeatured(false);
                 setProductStock("");
                 setProductImageUrl("");
+      setProductImageAssetId(null);
                 setProductPublished(true);
                 setShowProductForm(true);
               }
@@ -141,12 +182,29 @@ export function CommerceCorePage({
                 name: productName,
                 slug: productSlug,
                 item_type: productType,
+                category:
+                  productCategory.trim() || null,
+                summary:
+                  productSummary.trim() || null,
+                description:
+                  productDescription.trim() || null,
+                sku:
+                  productSku.trim() || null,
+                fulfillment_type:
+                  productFulfillment,
+                is_featured:
+                  productFeatured,
                 price_amount: productPrice,
                 currency: "KES",
                 stock_quantity: productStock.trim()
                   ? Number(productStock)
                   : null,
-                image_url: productImageUrl.trim() || null,
+                image_url:
+                  productImageAssetId
+                    ? null
+                    : productImageUrl.trim() || null,
+                image_asset_id:
+                  productImageAssetId,
                 is_published: productPublished,
               };
 
@@ -211,6 +269,93 @@ export function CommerceCorePage({
             </label>
 
             <label className="text-sm font-medium">
+              Category
+              <input
+                value={productCategory}
+                onChange={(event) =>
+                  setProductCategory(
+                    event.target.value,
+                  )
+                }
+                placeholder="Books, Merchandise, Downloads..."
+                className="mt-1 w-full rounded-xl border p-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              SKU
+              <input
+                value={productSku}
+                onChange={(event) =>
+                  setProductSku(
+                    event.target.value,
+                  )
+                }
+                placeholder="Optional inventory code"
+                className="mt-1 w-full rounded-xl border p-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium md:col-span-2">
+              Short summary
+              <textarea
+                value={productSummary}
+                onChange={(event) =>
+                  setProductSummary(
+                    event.target.value,
+                  )
+                }
+                rows={3}
+                placeholder="A concise description shown on store cards."
+                className="mt-1 w-full rounded-xl border p-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium md:col-span-2">
+              Full description
+              <textarea
+                value={productDescription}
+                onChange={(event) =>
+                  setProductDescription(
+                    event.target.value,
+                  )
+                }
+                rows={7}
+                placeholder="Describe the product, what is included, who it is for, and other useful details."
+                className="mt-1 w-full rounded-xl border p-3"
+              />
+            </label>
+
+            <label className="text-sm font-medium">
+              Fulfillment
+              <select
+                value={productFulfillment}
+                onChange={(event) =>
+                  setProductFulfillment(
+                    event.target.value,
+                  )
+                }
+                className="mt-1 w-full rounded-xl border p-3"
+              >
+                <option value="manual">
+                  Arranged manually
+                </option>
+                <option value="physical">
+                  Physical delivery
+                </option>
+                <option value="digital">
+                  Digital delivery
+                </option>
+                <option value="service">
+                  Service
+                </option>
+                <option value="session_package">
+                  Session package
+                </option>
+              </select>
+            </label>
+
+            <label className="text-sm font-medium">
               Stock quantity
               <input
                 min="0"
@@ -221,13 +366,44 @@ export function CommerceCorePage({
               />
             </label>
 
-            <label className="text-sm font-medium">
-              Image URL
+            <ManagedImageAssetPicker
+              label="Product image"
+              purpose="product_image"
+              scope="admin"
+              selectedAssetId={
+                productImageAssetId
+              }
+              legacyUrl={
+                productImageAssetId
+                  ? null
+                  : productImageUrl || null
+              }
+              disabled={
+                createProductMutation.isPending ||
+                updateProductMutation.isPending
+              }
+              onChange={(assetId) => {
+                setProductImageAssetId(
+                  assetId,
+                );
+
+                // Picker interaction replaces
+                // or removes a legacy URL.
+                setProductImageUrl("");
+              }}
+            />
+
+            <label className="flex items-center gap-2 text-sm font-medium">
               <input
-                value={productImageUrl}
-                onChange={(event) => setProductImageUrl(event.target.value)}
-                className="mt-1 w-full rounded-xl border p-3"
+                type="checkbox"
+                checked={productFeatured}
+                onChange={(event) =>
+                  setProductFeatured(
+                    event.target.checked,
+                  )
+                }
               />
+              Feature in store
             </label>
 
             <label className="flex items-center gap-2 text-sm font-medium">
@@ -290,12 +466,33 @@ export function CommerceCorePage({
                             setProductSlug(item.slug);
                             setProductPrice(item.price_amount);
                             setProductType(item.item_type);
+                            setProductCategory(
+                              item.category || "",
+                            );
+                            setProductSummary(
+                              item.summary || "",
+                            );
+                            setProductDescription(
+                              item.description || "",
+                            );
+                            setProductSku(
+                              item.sku || "",
+                            );
+                            setProductFulfillment(
+                              item.fulfillment_type,
+                            );
+                            setProductFeatured(
+                              item.is_featured,
+                            );
                             setProductStock(
                               item.stock_quantity === null
                                 ? ""
                                 : String(item.stock_quantity),
                             );
                             setProductImageUrl(item.image_url || "");
+                            setProductImageAssetId(
+                              item.image_asset_id,
+                            );
                             setProductPublished(item.is_published);
                             setShowProductForm(true);
                           }}

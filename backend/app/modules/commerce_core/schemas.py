@@ -62,6 +62,7 @@ class CommerceItemBase(BaseModel):
     session_credit_count: int | None = None
     fulfillment_type: str = "manual"
     image_url: str | None = None
+    image_asset_id: str | None = None
     sort_order: int = 0
     is_featured: bool = False
     is_published: bool = True
@@ -134,6 +135,7 @@ class CommerceItemUpdate(BaseModel):
     session_credit_count: int | None = None
     fulfillment_type: str | None = None
     image_url: str | None = None
+    image_asset_id: str | None = None
     sort_order: int | None = None
     is_featured: bool | None = None
     is_published: bool | None = None

@@ -30,6 +30,14 @@ class CommerceItem(Base):
 
     fulfillment_type: Mapped[str] = mapped_column(String(80), default="manual", nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_asset_id: Mapped[str | None] = mapped_column(
+        ForeignKey(
+            "files.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
 
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
