@@ -308,8 +308,10 @@ def public_page_sections(
     db: Session = Depends(get_db),
 ):
     allowed_pages = {
+        "branding",
         "home",
         "about",
+        "services",
         "contact",
     }
 

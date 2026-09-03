@@ -1,13 +1,27 @@
 import { useQuery } from "@tanstack/react-query";
-import { Clock3, Facebook, Globe2, Instagram, Linkedin, Mail, MapPin, Phone, Youtube } from "lucide-react";
+import {
+  Clock3,
+  Facebook,
+  Globe2,
+  Instagram,
+  Linkedin,
+  Mail,
+  MapPin,
+  Phone,
+  Youtube,
+} from "lucide-react";
 import { Link } from "react-router";
+import {
+  FaTiktok,
+  FaWhatsapp,
+} from "react-icons/fa6";
 
 import {
   contactSectionHref,
   fetchPublicSections,
   isPracticeContactDetail,
   isPracticeSocialLink,
-  safePublicWebUrl,
+  socialSectionHref,
   type LandingSection,
 } from "../lib/publicContent";
 
@@ -35,6 +49,7 @@ const socialIcons = {
   facebook: Facebook,
   linkedin: Linkedin,
   youtube: Youtube,
+  email: Mail,
 };
 
 function ContactDetail({ detail }: { detail: LandingSection }) {
@@ -72,9 +87,25 @@ export function PublicFooter({ siteName, navItems, tagline, description }: Publi
     retry: 1,
   });
 
-  const contactDetails = data?.filter(isPracticeContactDetail).slice(0, 4) ?? [];
-  const socialLinks = data?.filter(isPracticeSocialLink) ?? [];
-  const year = new Date().getFullYear();
+  const contactDetails =
+    data?.filter(
+      isPracticeContactDetail,
+    ).slice(0, 4) ?? [];
+
+  const socialLinks =
+    data?.filter(
+      isPracticeSocialLink,
+    ) ?? [];
+
+  const contactEmail =
+    data?.find(
+      (section) =>
+        section.key ===
+        "contact.email",
+    );
+
+  const year =
+    new Date().getFullYear();
 
   return (
     <footer data-ui-contract="public.footer" className="border-t border-[#35452f] bg-[#1e2b1c] text-[#e8eadf]">
@@ -89,25 +120,70 @@ export function PublicFooter({ siteName, navItems, tagline, description }: Publi
           {description ? (
             <p className="mt-5 max-w-xl text-sm leading-7 text-[#c8cfbd]">{description}</p>
           ) : null}
-          {socialLinks.length ? (
-            <div className="mt-7 flex flex-wrap gap-3" aria-label="Practice social links">
+          {socialLinks.length || contactEmail ? (
+            <div
+              className="mt-7 flex flex-wrap gap-3"
+              aria-label="Practice social links"
+            >
               {socialLinks.map((social) => {
                 const network = social.key.replace("contact.social.", "");
-                const Icon = socialIcons[network as keyof typeof socialIcons] ?? Globe2;
-                const href = safePublicWebUrl(social.cta_url);
+                const Icon =
+                  socialIcons[
+                    network as keyof typeof socialIcons
+                  ] ?? Globe2;
+
+                const href =
+                  socialSectionHref(social);
                 return href ? (
                   <a
                     key={social.key}
                     href={href}
-                    target="_blank"
-                    rel="noreferrer"
+                    target={
+                      href.startsWith("mailto:")
+                        ? undefined
+                        : "_blank"
+                    }
+                    rel={
+                      href.startsWith("mailto:")
+                        ? undefined
+                        : "noreferrer"
+                    }
                     aria-label={social.title || network}
                     className="grid h-10 w-10 place-items-center rounded-full border border-[#4b5b45] text-[#c8cfbd] transition hover:border-[#aab88d] hover:text-white"
                   >
-                    <Icon aria-hidden="true" className="h-4 w-4" />
+                    {network === "tiktok" ? (
+                      <FaTiktok
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                      />
+                    ) : network === "whatsapp" ? (
+                      <FaWhatsapp
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                      />
+                    ) : (
+                      <Icon
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                      />
+                    )}
                   </a>
                 ) : null;
               })}
+
+              {contactEmail ? (
+                <a
+                  href="/contact#contact-form"
+                  aria-label="Contact the practice by email"
+                  title={`Contact ${contactEmail.title}`}
+                  className="grid h-10 w-10 place-items-center rounded-full border border-[#4b5b45] text-[#c8cfbd] transition hover:border-[#aab88d] hover:text-white"
+                >
+                  <Mail
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                  />
+                </a>
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -110,6 +110,13 @@ export function AboutPage() {
   const hero = findSection(sections, "about.hero") ?? fallbackSections[0];
   const profile = findSection(sections, "about.profile") ?? fallbackSections[1];
   const cta = findSection(sections, "about.cta") ?? fallbackSections[2];
+
+  const principlesSection =
+    findSection(sections, "about.principles");
+
+  const teamSection =
+    findSection(sections, "about.team");
+
   const therapists = therapistsQuery.data ?? [];
   const services = servicesQuery.data ?? [];
   const stats = [
@@ -210,14 +217,15 @@ export function AboutPage() {
           <div className="grid gap-8 lg:grid-cols-[0.72fr_1.28fr] lg:items-end">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6f7f50]">
-                Practice principles
+                {principlesSection?.eyebrow || "Practice principles"}
               </p>
               <h2 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
-                What guides the experience of care.
+                {principlesSection?.title || "What guides the experience of care."}
               </h2>
             </div>
             <p className="max-w-2xl text-lg leading-8 text-[#66704f]">
-              A calm website is useful only when the care behind it is understandable, respectful, and shaped around real people.
+              {principlesSection?.body ||
+                "A calm website is useful only when the care behind it is understandable, respectful, and shaped around real people."}
             </p>
           </div>
 
@@ -239,14 +247,25 @@ export function AboutPage() {
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#6f7f50]">
-              Meet the team
+              {teamSection?.eyebrow || "Meet the team"}
             </p>
+
             <h2 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
-              Different perspectives, one thoughtful practice.
+              {teamSection?.title || "Different perspectives, one thoughtful practice."}
             </h2>
+
+            {teamSection?.body ? (
+              <p className="mt-4 max-w-2xl leading-7 text-[#66704f]">
+                {teamSection.body}
+              </p>
+            ) : null}
           </div>
-          <Link to="/therapists" className="text-sm font-semibold text-[#556b2f] hover:text-[#3f5124]">
-            View all therapist profiles →
+
+          <Link
+            to={teamSection?.cta_url || "/therapists"}
+            className="text-sm font-semibold text-[#556b2f] hover:text-[#3f5124]"
+          >
+            {teamSection?.cta_label || "View all therapist profiles"} →
           </Link>
         </div>
 

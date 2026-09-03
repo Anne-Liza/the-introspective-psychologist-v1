@@ -75,7 +75,7 @@ export const sidebarNavigationSections: SidebarNavigationSection[] = [
     items: [
       { label: "Blog", href: "/dashboard/blog", permission: "blog.read" },
       { label: "Files", href: "/dashboard/files", permission: "files.read" },
-      { label: "Content", href: "/dashboard/content", permission: "landing_sections.update" },
+      { label: "Website Content", href: "/dashboard/content", permission: "landing_sections.update" },
     ],
   },
   {

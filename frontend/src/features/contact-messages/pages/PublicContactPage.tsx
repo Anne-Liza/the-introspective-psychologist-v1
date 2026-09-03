@@ -8,7 +8,9 @@ import { apiClient } from "../../../lib/api-client";
 import {
   contactSectionHref,
   fetchPublicSections,
+  findSection,
   isPracticeContactDetail,
+  resolveLandingSectionImageUrl,
   type LandingSection,
 } from "../../public/lib/publicContent";
 import { contactSubmissionErrorMessage } from "../lib/contactSubmission";
@@ -19,6 +21,18 @@ type ContactPayload = {
   subject?: string;
   message: string;
   source?: string;
+};
+
+const fallbackHero: LandingSection = {
+  id: "contact-hero",
+  key: "contact.hero",
+  eyebrow: "Contact the practice",
+  title: "A clear, gentle way to begin a conversation.",
+  body:
+    "Ask about therapist fit, services, availability, workshops, or the administrative steps involved in starting care.",
+  cta_label: null,
+  cta_url: null,
+  image_url: "/demo/practice/practice-room.svg",
 };
 
 const fallbackDetails: LandingSection[] = [
@@ -149,6 +163,18 @@ export function PublicContactPage() {
     },
   });
 
+  const hero =
+    findSection(
+      sectionsQuery.data ?? [],
+      "contact.hero",
+    ) ?? fallbackHero;
+
+  const heroImage =
+    resolveLandingSectionImageUrl(
+      hero.image_url,
+    ) ??
+    "/demo/practice/practice-room.svg";
+
   const seededDetails = sectionsQuery.data?.filter(isPracticeContactDetail);
   const details = seededDetails?.length ? seededDetails : fallbackDetails;
   const urgent =
@@ -167,7 +193,7 @@ export function PublicContactPage() {
         data-ui-section="hero"
         className="relative isolate flex min-h-[430px] items-center overflow-hidden bg-[#20301d] px-6 py-20 text-white lg:px-12"
         style={{
-          backgroundImage: "url('/demo/practice/practice-room.svg')",
+          backgroundImage: `url('${heroImage}')`,
           backgroundPosition: "center",
           backgroundSize: "cover",
         }}
@@ -175,13 +201,13 @@ export function PublicContactPage() {
         <div className="absolute inset-0 -z-10 bg-[#172416]/80" />
         <div className="mx-auto w-full max-w-7xl text-center">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-[#ccd6b6]">
-            Contact the practice
+            {hero.eyebrow || "Contact the practice"}
           </p>
           <h1 className="mx-auto mt-5 max-w-4xl font-serif text-5xl leading-[0.98] md:text-7xl">
-            A clear, gentle way to begin a conversation.
+            {hero.title}
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-8 text-[#e3e8d9]">
-            Ask about therapist fit, services, availability, workshops, or the administrative steps involved in starting care.
+            {hero.body}
           </p>
         </div>
       </section>
@@ -214,7 +240,11 @@ export function PublicContactPage() {
           </aside>
         </div>
 
-        <form data-ui-section="contact-form" onSubmit={handleSubmit} className="rounded-[2.5rem] border border-[#d7dec8] bg-white p-7 shadow-sm md:p-10">
+        <form
+          id="contact-form"
+          data-ui-section="contact-form"
+          onSubmit={handleSubmit}
+ className="rounded-[2.5rem] border border-[#d7dec8] bg-white p-7 shadow-sm md:p-10">
           <p className="text-sm font-semibold uppercase tracking-[0.26em] text-[#6f7f50]">
             Send a message
           </p>
