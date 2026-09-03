@@ -43,7 +43,8 @@ import { FilesPage } from "../features/files/pages/FilesPage";
 import { MyMediaPage } from "../features/files/pages/MyMediaPage";
 import { FulfillmentPage } from "../features/fulfillment/pages/FulfillmentPage";
 import { TeamPage } from "../features/invitations/pages/TeamPage";
-import { ContentPage } from "../features/content/pages/ContentPage";
+import { WebsiteContentPage } from "../features/content/pages/WebsiteContentPage";
+import { WebsitePageEditorPage } from "../features/content/pages/WebsitePageEditorPage";
 import { MpesaPaymentsPage } from "../features/mpesa-payments/pages/MpesaPaymentsPage";
 import { PaymentAttemptsPage } from "../features/payment-attempts/pages/PaymentAttemptsPage";
 import { PaymentRequestsPage } from "../features/payment-requests/pages/PaymentRequestsPage";
@@ -147,7 +148,22 @@ export function App() {
         />
         <Route path="fulfillment" element={<PermissionRoute permission="fulfillment.read"><FulfillmentPage /></PermissionRoute>} />
         <Route path="team" element={<PermissionRoute permission="users.read"><TeamPage /></PermissionRoute>} />
-        <Route path="content" element={<PermissionRoute permission="landing_sections.update"><ContentPage /></PermissionRoute>} />
+        <Route
+          path="content"
+          element={
+            <PermissionRoute permission="landing_sections.update">
+              <WebsiteContentPage />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="content/:pageKey"
+          element={
+            <PermissionRoute permission="landing_sections.update">
+              <WebsitePageEditorPage />
+            </PermissionRoute>
+          }
+        />
         <Route path="mpesa-payments" element={<PermissionRoute permission="mpesa_payments.read"><MpesaPaymentsPage /></PermissionRoute>} />
         <Route path="payment-attempts" element={<PermissionRoute permission="payment_attempts.read"><PaymentAttemptsPage /></PermissionRoute>} />
         <Route path="payment-requests" element={<PermissionRoute permission="payment_requests.read"><PaymentRequestsPage /></PermissionRoute>} />

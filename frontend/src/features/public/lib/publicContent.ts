@@ -3,7 +3,7 @@ import {
   resolveApiAssetUrl,
 } from "../../../lib/api-client";
 
-export type PublicPageName = "home" | "about" | "contact";
+export type PublicPageName = "branding" | "home" | "about" | "services" | "contact";
 
 export type LandingSection = {
   id: string;
@@ -14,6 +14,7 @@ export type LandingSection = {
   cta_label: string | null;
   cta_url: string | null;
   image_url: string | null;
+  image_asset_id?: string | null;
 };
 
 export async function fetchPublicSections(page: PublicPageName) {
@@ -83,6 +84,7 @@ export function isPracticeSocialLink(section: LandingSection) {
 export function isPracticeContactDetail(section: LandingSection) {
   return (
     section.key.startsWith("contact.") &&
+    section.key !== "contact.hero" &&
     section.key !== "contact.emergency" &&
     !section.key.startsWith("contact.faq.") &&
     !section.key.startsWith("contact.social.") &&
